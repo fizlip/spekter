@@ -32,6 +32,6 @@ export async function POST(request: Request) {
   }
 }
 
-function errorResponse(status: number, code: string, message: string) {
+function errorResponse(status: number, code: ErrorCode | "internal_error", message: string) {
   return Response.json({ error: { code, message } }, { status });
 }

@@ -1,22 +1,8 @@
-import { MockLanguageModelV3 } from "ai/test";
 import { describe, expect, it } from "vitest";
 import { ProviderError } from "../errors";
+import { failingModel, replyingModel } from "../testing/mock-model";
 import { completeChat } from "./complete";
 import type { ChatMessage } from "./contract";
-
-function replyingModel(text: string) {
-  return new MockLanguageModelV3({
-    doGenerate: {
-      content: [{ type: "text", text }],
-      finishReason: { unified: "stop", raw: "stop" },
-      usage: {
-        inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
-        outputTokens: { total: 1, text: 1, reasoning: 0 },
-      },
-      warnings: [],
-    },
-  });
-}
 
 const conversation: ChatMessage[] = [
   { role: "user", content: "My name is Filip." },
@@ -45,13 +31,7 @@ describe("completeChat", () => {
   });
 
   it("wraps model failures in a ProviderError with the original message", async () => {
-    const model = new MockLanguageModelV3({
-      doGenerate: async () => {
-        throw new Error("upstream exploded");
-      },
-    });
-
-    const result = completeChat([{ role: "user", content: "Hi" }], model);
+    const result = completeChat([{ role: "user", content: "Hi" }], failingModel("upstream exploded"));
     await expect(result).rejects.toBeInstanceOf(ProviderError);
     await expect(result).rejects.toThrow("upstream exploded");
   });

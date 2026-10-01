@@ -1,6 +1,7 @@
-import { MockLanguageModelV3 } from "ai/test";
+import type { LanguageModel } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createOpenRouterModel } from "@/core/models/openrouter";
+import { failingModel, replyingModel } from "@/core/testing/mock-model";
 import { POST } from "./route";
 
 vi.mock("@/core/models/openrouter", () => ({ createOpenRouterModel: vi.fn() }));
@@ -21,24 +22,8 @@ function chatRequest(body: unknown) {
   });
 }
 
-type MockOptions = NonNullable<ConstructorParameters<typeof MockLanguageModelV3>[0]>;
-
-function mockModel(doGenerate: MockOptions["doGenerate"]) {
-  const model = new MockLanguageModelV3({ doGenerate });
+function stubOpenRouterModel(model: LanguageModel) {
   vi.mocked(createOpenRouterModel).mockReturnValue(model);
-  return model;
-}
-
-function replyWith(text: string) {
-  return mockModel({
-    content: [{ type: "text", text }],
-    finishReason: { unified: "stop", raw: "stop" },
-    usage: {
-      inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
-      outputTokens: { total: 1, text: 1, reasoning: 0 },
-    },
-    warnings: [],
-  });
 }
 
 beforeEach(() => {
@@ -53,7 +38,7 @@ afterEach(() => {
 
 describe("POST /api/chat", () => {
   it("returns the complete assistant reply for a multi-turn conversation", async () => {
-    replyWith("Your name is Filip.");
+    stubOpenRouterModel(replyingModel("Your name is Filip."));
 
     const response = await POST(chatRequest(conversation));
 
@@ -107,9 +92,7 @@ describe("POST /api/chat", () => {
   });
 
   it("returns 502 provider_error with the provider's message when the model fails", async () => {
-    mockModel(async () => {
-      throw new Error("Rate limit exceeded");
-    });
+    stubOpenRouterModel(failingModel("Rate limit exceeded"));
 
     const response = await POST(chatRequest(conversation));
     const body = await response.json();
