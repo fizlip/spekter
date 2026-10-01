@@ -1,33 +1,13 @@
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { ChatInterface } from "@/components/chat/ChatInterface";
+import { createInitialMessages } from "@/components/chat/chat-data";
 
 export default function Home() {
+  const now = new Date();
+
   return (
-    <div className="flex flex-1 items-center justify-center p-6 rounded-full">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">Spekter</CardTitle>
-          <CardDescription>Next.js + shadcn/ui is ready to go.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Edit <code className="font-mono">src/app/page.tsx</code> to get
-            started. Add components with{" "}
-            <code className="font-mono">npx shadcn@latest add</code>.
-          </p>
-        </CardContent>
-        <CardFooter className="gap-2">
-          <Button>Get started</Button>
-          <Button variant="outline">Docs</Button>
-        </CardFooter>
-      </Card>
-    </div>
+    <ChatInterface
+      initialMessages={createInitialMessages(now)}
+      todayKey={now.toISOString().slice(0, 10)}
+    />
   );
 }
