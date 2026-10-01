@@ -9,7 +9,7 @@ const chatMessageSchema = z.object({
 const chatRequestSchema = z.object({
   messages: z
     .array(chatMessageSchema)
-    .min(1, "Conversation must contain at least one message")
+    .min(1, { message: "Conversation must contain at least one message", abort: true })
     .refine((messages) => messages.at(-1)?.role === "user", {
       message: "Conversation must end with a user message",
     }),
