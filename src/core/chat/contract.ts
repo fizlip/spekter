@@ -3,7 +3,7 @@ import { InvalidRequestError } from "../errors";
 
 const chatMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
-  content: z.string().min(1, "Message content must not be empty"),
+  content: z.string().refine((content) => content.trim().length > 0, "Message content must not be empty"),
 });
 
 const chatRequestSchema = z.object({

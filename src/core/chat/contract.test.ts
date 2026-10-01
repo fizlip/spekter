@@ -21,6 +21,7 @@ describe("parseChatRequest", () => {
     ["a non-object body", "hello"],
     ["a system message", { messages: [{ role: "system", content: "Be terse." }, { role: "user", content: "Hi" }] }],
     ["empty content", { messages: [{ role: "user", content: "" }] }],
+    ["whitespace-only content", { messages: [{ role: "user", content: "   " }] }],
     ["non-string content", { messages: [{ role: "user", content: 42 }] }],
     [
       "a conversation ending with an assistant message",

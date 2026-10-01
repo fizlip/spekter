@@ -36,6 +36,22 @@ describe("completeChat", () => {
     await expect(result).rejects.toThrow("upstream exploded");
   });
 
+  it("treats an empty reply as a provider error instead of a successful reply", async () => {
+    const result = completeChat([{ role: "user", content: "Hi" }], replyingModel("   "));
+    await expect(result).rejects.toBeInstanceOf(ProviderError);
+    await expect(result).rejects.toThrow("Model returned no text (finish reason: stop)");
+  });
+
+  it.each(["content-filter", "error", "other"] as const)(
+    "treats a %s finish as a provider error even when some text came back",
+    async (finishReason) => {
+      const model = replyingModel("partial answ", finishReason);
+      await expect(completeChat([{ role: "user", content: "Hi" }], model)).rejects.toThrow(
+        `Model stopped without completing its reply (finish reason: ${finishReason})`,
+      );
+    },
+  );
+
   it("does not carry messages from one call into the next", async () => {
     const model = replyingModel("ok");
     await completeChat([{ role: "user", content: "First" }], model);

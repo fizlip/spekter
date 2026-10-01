@@ -14,10 +14,10 @@ const conversation = {
   ],
 };
 
-function chatRequest(body: unknown) {
+function chatRequest(body: unknown, contentType = "application/json") {
   return new Request("http://localhost/api/chat", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": contentType },
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
 }
@@ -82,6 +82,26 @@ describe("POST /api/chat", () => {
     expect((await response.json()).error.code).toBe("invalid_request");
   });
 
+  it("returns 400 invalid_request without calling the model for a non-JSON content type", async () => {
+    const response = await POST(chatRequest(conversation, "text/plain"));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body).toEqual({
+      error: { code: "invalid_request", message: "Content-Type must be application/json" },
+    });
+    expect(createOpenRouterModel).not.toHaveBeenCalled();
+  });
+
+  it("returns 502 provider_error when the model returns an empty reply", async () => {
+    stubOpenRouterModel(replyingModel(""));
+
+    const response = await POST(chatRequest(conversation));
+
+    expect(response.status).toBe(502);
+    expect((await response.json()).error.code).toBe("provider_error");
+  });
+
   it("returns 400 invalid_request when the conversation ends with an assistant message", async () => {
     const response = await POST(
       chatRequest({ messages: [{ role: "user", content: "Hi" }, { role: "assistant", content: "Hello" }] }),
@@ -109,6 +129,8 @@ describe("POST /api/chat", () => {
     const response = await POST(chatRequest(conversation));
 
     expect(response.status).toBe(500);
-    expect((await response.json()).error.code).toBe("internal_error");
+    expect(await response.json()).toEqual({
+      error: { code: "internal_error", message: "Unexpected server error" },
+    });
   });
 });

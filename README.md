@@ -34,15 +34,16 @@ A successful reply:
 { "message": { "role": "assistant", "content": "Your name is Filip." }, "model": "anthropic/claude-haiku-4.5" }
 ```
 
-Rules: roles are `user` or `assistant`, content must be non-empty, and the last message must be from the user.
+Rules: send `Content-Type: application/json`, roles are `user` or `assistant`, content must not be empty or whitespace, and the last message must be from the user. Requests must be addressed to `127.0.0.1` or `localhost`.
 
 Errors always have the shape `{ "error": { "code", "message" } }`:
 
 | Status | Code | Meaning |
 | --- | --- | --- |
 | 400 | `invalid_request` | Body is not JSON or the conversation breaks the rules above |
+| 403 | `forbidden` | The request was not addressed to `127.0.0.1` or `localhost` |
 | 503 | `not_configured` | `OPENROUTER_API_KEY` or `SPEKTER_MODEL` is missing |
-| 502 | `provider_error` | OpenRouter or the model failed; the message says why |
+| 502 | `provider_error` | OpenRouter or the model failed, or the model returned an empty or cut-off reply; the message says why |
 | 500 | `internal_error` | Something unexpected went wrong on the server |
 
 ## Development

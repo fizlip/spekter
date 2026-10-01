@@ -12,6 +12,9 @@ const statusByCode: Record<ErrorCode, number> = {
 
 export async function POST(request: Request) {
   try {
+    if (!request.headers.get("content-type")?.startsWith("application/json")) {
+      throw new InvalidRequestError("Content-Type must be application/json");
+    }
     const body = await request.json().catch(() => {
       throw new InvalidRequestError("Request body must be valid JSON");
     });

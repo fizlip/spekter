@@ -6,10 +6,12 @@ export function mockModel(doGenerate: MockOptions["doGenerate"]) {
   return new MockLanguageModelV3({ doGenerate });
 }
 
-export function replyingModel(text: string) {
+type FinishReason = "stop" | "length" | "content-filter" | "tool-calls" | "error" | "other";
+
+export function replyingModel(text: string, finishReason: FinishReason = "stop") {
   return mockModel({
     content: [{ type: "text", text }],
-    finishReason: { unified: "stop", raw: "stop" },
+    finishReason: { unified: finishReason, raw: finishReason },
     usage: {
       inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
       outputTokens: { total: 1, text: 1, reasoning: 0 },
