@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Spekter
 
-## Getting Started
+My personal AI lab. See [STRATEGY.md](STRATEGY.md) for what it is and why.
 
-First, run the development server:
+## Getting started
 
 ```bash
+npm install
+cp .env.example .env.local   # then add your OpenRouter key
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The dev server listens on `http://127.0.0.1:3000` only, so nothing on your network can reach the API.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Core chat API
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`POST /api/chat` takes a conversation and returns the assistant's next reply as one complete message. It is stateless: send the full history every time. The model is set by `SPEKTER_MODEL` in `.env.local`.
 
-## Learn More
+```bash
+curl -s http://127.0.0.1:3000/api/chat \
+  -H 'content-type: application/json' \
+  -d '{
+    "messages": [
+      { "role": "user", "content": "My name is Filip." },
+      { "role": "assistant", "content": "Nice to meet you, Filip." },
+      { "role": "user", "content": "What is my name?" }
+    ]
+  }'
+```
 
-To learn more about Next.js, take a look at the following resources:
+A successful reply:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```json
+{ "message": { "role": "assistant", "content": "Your name is Filip." }, "model": "anthropic/claude-haiku-4.5" }
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Rules: roles are `user` or `assistant`, content must be non-empty, and the last message must be from the user.
 
-## Deploy on Vercel
+Errors always have the shape `{ "error": { "code", "message" } }`:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 400 | `invalid_request` | Body is not JSON or the conversation breaks the rules above |
+| 503 | `not_configured` | `OPENROUTER_API_KEY` or `SPEKTER_MODEL` is missing |
+| 502 | `provider_error` | OpenRouter or the model failed; the message says why |
+| 500 | `internal_error` | Something unexpected went wrong on the server |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Development
+
+```bash
+npm run test   # unit tests (no network, no credits)
+npm run lint
+npm run build
+```
