@@ -46,6 +46,32 @@ Errors always have the shape `{ "error": { "code", "message" } }`:
 | 502 | `provider_error` | OpenRouter or the model failed, or the model returned an empty or cut-off reply; the message says why |
 | 500 | `internal_error` | Something unexpected went wrong on the server |
 
+### Streaming
+
+`POST /api/chat/stream` takes exactly the same request and streams the reply as it is generated. The web chat uses this route.
+
+```bash
+curl -sN http://127.0.0.1:3000/api/chat/stream \
+  -H 'content-type: application/json' \
+  -d '{ "messages": [{ "role": "user", "content": "Count to five." }] }'
+```
+
+The response is `application/x-ndjson`: one JSON frame per line.
+
+```text
+{"type":"delta","text":"1, 2, "}
+{"type":"delta","text":"3, 4, 5."}
+{"type":"done","model":"anthropic/claude-haiku-4.5"}
+```
+
+| Frame | Meaning |
+| --- | --- |
+| `{ "type": "delta", "text" }` | The next piece of the reply; join them in order |
+| `{ "type": "done", "model" }` | The reply is complete |
+| `{ "type": "error", "code", "message" }` | The reply failed; any text already received is not a complete reply |
+
+Every stream ends with exactly one `done` or `error` frame. Problems found before streaming starts (bad request, missing config) return the same JSON errors and statuses as `POST /api/chat`. A failure after streaming starts, such as the provider breaking off or returning an empty or cut-off reply, arrives as an `error` frame with code `provider_error`, because the 200 status has already been sent. Closing the connection cancels the model call.
+
 ## Development
 
 ```bash
