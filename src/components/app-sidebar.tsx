@@ -15,18 +15,21 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { useChatSession } from "@/components/chat/chat-session"
 
 const navItems = [{ title: "Home", href: "/", icon: HomeIcon }]
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const { newChat } = useChatSession()
 
   return (
-    <Sidebar collapsible="none">
+    <Sidebar collapsible="none" className="bg-transparent">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton>
+            <h1 className="font-bold font-gg-sans p-2">afryend</h1>
+            <SidebarMenuButton onClick={newChat}>
               <PlusIcon /> New chat
             </SidebarMenuButton>
           </SidebarMenuItem>

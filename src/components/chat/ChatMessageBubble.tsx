@@ -1,3 +1,4 @@
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { ChatMessage } from "./types";
 
 function formatTime(createdAt: string) {
@@ -49,10 +50,15 @@ export function AssistantMessage({ message }: { message: ChatMessage }) {
   return (
     <article
       aria-label={`Spekter at ${formatTime(message.createdAt)}`}
-      className="flex items-end gap-0 justify-start"
+      className="flex items-start gap-2 justify-start hover:bg-slate-50 px-2"
     >
-      <div className="flex w-[100%] flex-col">
-        <div className="rounded whitespace-pre-wrap break-words bg-white text-[16px] leading-[1.55] text-slate-800 hover:bg-slate-50 p-1">
+      <Avatar className="mt-1 after:hidden">
+        <AvatarImage src="/afryend.jpg" alt="Spekter" />
+        <AvatarFallback>SP</AvatarFallback>
+      </Avatar>
+      <div className="flex min-w-0 flex-1 flex-col p-1">
+        <p className="font-bold font-gg-sans text-green-700">afryend</p>
+        <div className="rounded whitespace-pre-wrap break-words text-[16px] leading-[1.55] text-slate-800">
           {message.content ||
             (message.status === "streaming" && (
               <span aria-label="Spekter is replying" className="animate-pulse text-slate-400">
@@ -77,10 +83,14 @@ export function UserMessage({ message }: { message: ChatMessage }) {
   return (
     <article
       aria-label={`You at ${formatTime(message.createdAt)}`}
-      className="flex items-end gap-0 justify-start"
+      className="flex items-start gap-2 justify-start hover:bg-slate-50 px-2"
     >
-      <div className="flex w-[100%] flex-col">
-        <div className="rounded whitespace-pre-wrap break-words bg-white text-[16px] leading-[1.55] text-slate-800 hover:bg-slate-50 p-1">
+      <Avatar className="mt-1">
+        <AvatarFallback>A</AvatarFallback>
+      </Avatar>
+      <div className="flex min-w-0 flex-1 flex-col p-1">
+        <p className="font-bold font-gg-sans">anonymous</p>
+        <div className="rounded whitespace-pre-wrap break-words text-[16px] leading-[1.55] text-slate-800">
           {message.content}
         </div>
       </div>
