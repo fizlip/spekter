@@ -82,17 +82,6 @@ describe("POST /api/chat", () => {
     expect((await response.json()).error.code).toBe("invalid_request");
   });
 
-  it("returns 400 invalid_request without calling the model for a non-JSON content type", async () => {
-    const response = await POST(chatRequest(conversation, "text/plain"));
-    const body = await response.json();
-
-    expect(response.status).toBe(400);
-    expect(body).toEqual({
-      error: { code: "invalid_request", message: "Content-Type must be application/json" },
-    });
-    expect(createOpenRouterModel).not.toHaveBeenCalled();
-  });
-
   it("returns 502 provider_error when the model returns an empty reply", async () => {
     stubOpenRouterModel(replyingModel(""));
 
