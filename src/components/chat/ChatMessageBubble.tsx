@@ -53,8 +53,21 @@ export function AssistantMessage({ message }: { message: ChatMessage }) {
     >
       <div className="flex w-[100%] flex-col">
         <div className="rounded whitespace-pre-wrap break-words bg-white text-[16px] leading-[1.55] text-slate-800 hover:bg-slate-50 p-1">
-          {message.content}
+          {message.content ||
+            (message.status === "streaming" && (
+              <span aria-label="Spekter is replying" className="animate-pulse text-slate-400">
+                …
+              </span>
+            ))}
         </div>
+        {message.status === "error" && (
+          <p
+            className="mx-1 mt-1 rounded border border-red-200 bg-red-50 px-2 py-1 text-[13px] text-red-700"
+            role="alert"
+          >
+            Reply failed: {message.error}
+          </p>
+        )}
       </div>
     </article>
   );

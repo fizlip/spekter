@@ -8,6 +8,7 @@ import {
   getDayKey,
   UserMessage,
 } from "./ChatMessageBubble";
+import { streamReply, toConversation } from "./stream-client";
 import type { ChatMessage } from "./types";
 
 export function ChatInterface({
@@ -21,36 +22,47 @@ export function ChatInterface({
   const [draft, setDraft] = useState("");
   const [isThinking, setIsThinking] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inFlightRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, isThinking]);
 
-  function sendMessage() {
+  useEffect(() => () => inFlightRef.current?.abort(), []);
+
+  async function sendMessage() {
     const content = draft.trim();
     if (!content || isThinking) return;
 
     const sentAt = new Date().toISOString();
+    const userMessage: ChatMessage = { id: `user-${Date.now()}`, role: "user", content, createdAt: sentAt };
+    const replyId = `assistant-${Date.now()}`;
+    const updateReply = (change: (reply: ChatMessage) => Partial<ChatMessage>) =>
+      setMessages((current) =>
+        current.map((message) => (message.id === replyId ? { ...message, ...change(message) } : message)),
+      );
+
     setMessages((current) => [
       ...current,
-      { id: `user-${Date.now()}`, role: "user", content, createdAt: sentAt },
+      userMessage,
+      { id: replyId, role: "assistant", content: "", createdAt: sentAt, status: "streaming" },
     ]);
     setDraft("");
     setIsThinking(true);
 
-    window.setTimeout(() => {
-      setMessages((current) => [
-        ...current,
-        {
-          id: `assistant-${Date.now()}`,
-          role: "assistant",
-          content:
-            "This chat is ready for an AI provider. Connect your model in the chat handler to get a personalized response.",
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-      setIsThinking(false);
-    }, 700);
+    const controller = new AbortController();
+    inFlightRef.current = controller;
+    await streamReply(
+      toConversation([...messages, userMessage]),
+      {
+        onDelta: (text) => updateReply((reply) => ({ content: reply.content + text })),
+        onDone: () => updateReply(() => ({ status: undefined })),
+        onError: ({ message }) => updateReply(() => ({ status: "error", error: message })),
+      },
+      controller.signal,
+    );
+    inFlightRef.current = null;
+    setIsThinking(false);
   }
 
   return (
