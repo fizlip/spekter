@@ -86,11 +86,10 @@ export function UserMessage({ message }: { message: ChatMessage }) {
       className="flex items-start gap-2 justify-start hover:bg-slate-50 px-2"
     >
       <Avatar className="mt-1">
-        <AvatarImage src="https://github.com/evilrabbit.png" alt="You" />
-        <AvatarFallback>ME</AvatarFallback>
+        <AvatarFallback>A</AvatarFallback>
       </Avatar>
       <div className="flex min-w-0 flex-1 flex-col p-1">
-        <p className="font-bold font-gg-sans">Filip Zlatoidsky</p>
+        <p className="font-bold font-gg-sans">anonymous</p>
         <div className="rounded whitespace-pre-wrap break-words text-[16px] leading-[1.55] text-slate-800">
           {message.content}
         </div>
