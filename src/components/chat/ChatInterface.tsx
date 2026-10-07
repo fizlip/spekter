@@ -100,10 +100,9 @@ export function ChatInterface({
         </div>
       </section>
 
-      <footer className="shrink-0 bg-transparent px-4 pb-4 pt-3 sm:px-8 sm:pb-5">
+      <footer className="shrink-0 bg-transparent p-2">
         <div className="w-full">
           <ChatComposer
-            disabled={isThinking}
             onChange={setDraft}
             onSend={sendMessage}
             value={draft}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { AppSidebar } from "@/components/app-sidebar";
+import { ChatSessionProvider } from "@/components/chat/chat-session";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import "./globals.css";
 
@@ -31,12 +32,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex h-svh flex-col overflow-hidden bg-[#fdfdfd]">
         <SidebarProvider>
-          <AppSidebar />
-          <div className="m-2 flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-md border border-[#e0e0e0]">
-            <SidebarInset>
-              {children}
-            </SidebarInset>
-          </div>
+          <ChatSessionProvider>
+            <AppSidebar />
+            <div className="m-2 flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-md border border-[#ebebeb]">
+              <SidebarInset>
+                {children}
+              </SidebarInset>
+            </div>
+          </ChatSessionProvider>
         </SidebarProvider>
       </body>
     </html>
