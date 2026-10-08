@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, vi } from "vitest";
@@ -14,7 +14,10 @@ export function withTempRequestLog() {
     vi.stubEnv("SPEKTER_REQUEST_LOG", log.path);
   });
 
+  // A request's log write is not awaited, so give an in-flight write time to open its file
+  // before removing the directory under it. Tests that write nothing just hit the short timeout.
   afterEach(async () => {
+    await vi.waitFor(() => access(log.path), { timeout: 100, interval: 5 }).catch(() => {});
     await rm(log.dir, { recursive: true, force: true });
   });
 

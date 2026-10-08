@@ -22,7 +22,7 @@ afterEach(() => {
 
 describe("trackRequest", () => {
   it("writes one reply entry with timestamp, endpoint, model and duration", async () => {
-    vi.useFakeTimers({ now: new Date("2026-10-08T10:00:00.000Z") });
+    vi.useFakeTimers({ now: new Date("2026-10-08T10:00:00.000Z"), toFake: ["Date", "performance"] });
     const tracker = trackRequest("chat");
     vi.advanceTimersByTime(1234);
     await tracker.reply();

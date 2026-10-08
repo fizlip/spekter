@@ -25,7 +25,8 @@ export type RequestTracker = {
 
 // One tracker per request; only the first settle writes, so each request logs exactly one entry.
 export function trackRequest(endpoint: RequestEndpoint): RequestTracker {
-  const startedAt = Date.now();
+  const timestamp = new Date().toISOString();
+  const startedAt = performance.now();
   const model = readConfiguredModel();
   let settled = false;
 
@@ -33,12 +34,12 @@ export function trackRequest(endpoint: RequestEndpoint): RequestTracker {
     if (settled) return Promise.resolve();
     settled = true;
     return writeEntry({
-      timestamp: new Date(startedAt).toISOString(),
+      timestamp,
       endpoint,
       model,
       outcome,
       ...(errorCode && { errorCode }),
-      durationMs: Date.now() - startedAt,
+      durationMs: Math.round(performance.now() - startedAt),
     });
   };
 
