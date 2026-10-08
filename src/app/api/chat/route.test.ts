@@ -3,8 +3,8 @@ import type { LanguageModel } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createOpenRouterModel } from "@/core/models/openrouter";
 import { failingModel, replyingModel } from "@/core/testing/mock-model";
+import { waitForLogEntries, withTempRequestLog } from "@/core/testing/request-log";
 import { POST } from "./route";
-import { withTempRequestLog, waitForLogEntries } from "@/core/testing/request-log";
 
 vi.mock("@/core/models/openrouter", () => ({ createOpenRouterModel: vi.fn() }));
 

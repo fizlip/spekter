@@ -8,8 +8,8 @@ import {
   streamingModel,
   textParts,
 } from "@/core/testing/mock-model";
+import { waitForLogEntries, withTempRequestLog } from "@/core/testing/request-log";
 import { POST } from "./route";
-import { withTempRequestLog, waitForLogEntries } from "@/core/testing/request-log";
 
 vi.mock("@/core/models/openrouter", () => ({ createOpenRouterModel: vi.fn() }));
 

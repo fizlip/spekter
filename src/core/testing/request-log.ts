@@ -6,18 +6,16 @@ import type { RequestLogEntry } from "../instrumentation/request-log";
 
 // Points SPEKTER_REQUEST_LOG at a fresh temp file per test so no test writes into the repo.
 export function withTempRequestLog() {
-  let dir = "";
   const log = { path: "", dir: "" };
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), "spekter-request-log-"));
-    log.dir = dir;
-    log.path = join(dir, "requests.jsonl");
+    log.dir = await mkdtemp(join(tmpdir(), "spekter-request-log-"));
+    log.path = join(log.dir, "requests.jsonl");
     vi.stubEnv("SPEKTER_REQUEST_LOG", log.path);
   });
 
   afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
+    await rm(log.dir, { recursive: true, force: true });
   });
 
   return log;
@@ -31,11 +29,11 @@ export async function readLogEntries(path: string): Promise<RequestLogEntry[]> {
     .map((line) => JSON.parse(line));
 }
 
-// Log writes are not awaited by the request, so wait until the expected number of entries lands.
-export function waitForLogEntries(path: string, count = 1): Promise<RequestLogEntry[]> {
+// Log writes are not awaited by the request, so wait until the single expected entry lands.
+export function waitForLogEntries(path: string): Promise<RequestLogEntry[]> {
   return vi.waitFor(async () => {
     const entries = await readLogEntries(path);
-    expect(entries).toHaveLength(count);
+    expect(entries).toHaveLength(1);
     return entries;
   });
 }

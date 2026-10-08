@@ -1,34 +1,23 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { InvalidRequestError, NotConfiguredError, ProviderError } from "../errors";
 import type { ChatStreamFrame } from "../chat/stream-frames";
-import { trackRequest, trackStream, type RequestLogEntry } from "./request-log";
+import { InvalidRequestError, NotConfiguredError, ProviderError } from "../errors";
+import { readLogEntries, waitForLogEntries, withTempRequestLog } from "../testing/request-log";
+import { trackRequest, trackStream } from "./request-log";
 
-let dir: string;
-let logPath: string;
+const log = withTempRequestLog();
+const readEntries = (path = log.path) => readLogEntries(path);
+const waitForEntries = () => waitForLogEntries(log.path);
 
-async function readEntries(path = logPath): Promise<RequestLogEntry[]> {
-  const text = await readFile(path, "utf8");
-  return text
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => JSON.parse(line));
-}
-
-beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), "spekter-request-log-"));
-  logPath = join(dir, "requests.jsonl");
-  vi.stubEnv("SPEKTER_REQUEST_LOG", logPath);
+beforeEach(() => {
   vi.stubEnv("SPEKTER_MODEL", "openai/gpt-test");
 });
 
-afterEach(async () => {
+afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
-  await rm(dir, { recursive: true, force: true });
 });
 
 describe("trackRequest", () => {
@@ -78,7 +67,7 @@ describe("trackRequest", () => {
   });
 
   it("creates missing parent directories for the log file", async () => {
-    const nested = join(dir, "a", "b", "requests.jsonl");
+    const nested = join(log.dir, "a", "b", "requests.jsonl");
     vi.stubEnv("SPEKTER_REQUEST_LOG", nested);
     await trackRequest("chat").reply();
 
@@ -94,7 +83,7 @@ describe("trackRequest", () => {
 
   it("reports a failed write to the console without throwing", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    const blocker = join(dir, "not-a-dir");
+    const blocker = join(log.dir, "not-a-dir");
     await writeFile(blocker, "");
     vi.stubEnv("SPEKTER_REQUEST_LOG", join(blocker, "requests.jsonl"));
 
@@ -113,14 +102,6 @@ describe("trackStream", () => {
     const out: ChatStreamFrame[] = [];
     for await (const frame of frames) out.push(frame);
     return out;
-  }
-
-  async function waitForEntries() {
-    return vi.waitFor(async () => {
-      const entries = await readEntries();
-      expect(entries).toHaveLength(1);
-      return entries;
-    });
   }
 
   it("passes frames through unchanged and records a reply on done", async () => {
