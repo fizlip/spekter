@@ -8,9 +8,12 @@ import {
   streamingModel,
   textParts,
 } from "@/core/testing/mock-model";
+import { waitForLogEntries, withTempRequestLog } from "@/core/testing/request-log";
 import { POST } from "./route";
 
 vi.mock("@/core/models/openrouter", () => ({ createOpenRouterModel: vi.fn() }));
+
+const log = withTempRequestLog();
 
 const conversation = {
   messages: [
@@ -137,5 +140,62 @@ describe("POST /api/chat/stream", () => {
 
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: { code: "internal_error", message: "Unexpected server error" } });
+  });
+});
+
+describe("POST /api/chat/stream request log", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function onlyEntry() {
+    const [entry] = await waitForLogEntries(log.path);
+    return entry;
+  }
+
+  it("records one reply entry for a completed stream", async () => {
+    stubOpenRouterModel(streamingModel([...textParts(["Your name ", "is Filip."]), finishPart()], "openai/gpt-test"));
+
+    await readFrames(await POST(streamRequest(conversation)));
+
+    expect(await onlyEntry()).toMatchObject({ endpoint: "chat_stream", model: "openai/gpt-test", outcome: "reply" });
+  });
+
+  it("records provider_error when the provider fails mid-stream", async () => {
+    stubOpenRouterModel(
+      streamingModel([...textParts(["Your name "]), { type: "error", error: new Error("upstream exploded") }]),
+    );
+
+    await readFrames(await POST(streamRequest(conversation)));
+
+    expect(await onlyEntry()).toMatchObject({ outcome: "error", errorCode: "provider_error" });
+  });
+
+  it("records aborted when the client disconnects mid-stream", async () => {
+    stubOpenRouterModel(hangingModel(textParts(["Your name "]).slice(0, 2)));
+    const controller = new AbortController();
+
+    const response = await POST(streamRequest(conversation, controller.signal));
+    const reader = response.body!.getReader();
+    await reader.read();
+    controller.abort();
+    await reader.read();
+
+    expect(await onlyEntry()).toMatchObject({ outcome: "aborted" });
+  });
+
+  it("records not_configured with a null model when SPEKTER_MODEL is unset", async () => {
+    vi.stubEnv("SPEKTER_MODEL", "");
+
+    const response = await POST(streamRequest(conversation));
+
+    expect(response.status).toBe(503);
+    expect(await onlyEntry()).toMatchObject({ outcome: "error", errorCode: "not_configured", model: null });
+  });
+
+  it("records invalid_request for a body that is not JSON", async () => {
+    await POST(streamRequest("not json"));
+
+    expect(await onlyEntry()).toMatchObject({ outcome: "error", errorCode: "invalid_request" });
   });
 });

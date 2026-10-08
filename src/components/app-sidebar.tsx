@@ -1,7 +1,5 @@
 "use client"
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
 import { HomeIcon, PlusIcon } from "lucide-react"
 
 import {
@@ -9,7 +7,6 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -20,7 +17,6 @@ import { useChatSession } from "@/components/chat/chat-session"
 const navItems = [{ title: "Home", href: "/", icon: HomeIcon }]
 
 export function AppSidebar() {
-  const pathname = usePathname()
   const { newChat } = useChatSession()
 
   return (

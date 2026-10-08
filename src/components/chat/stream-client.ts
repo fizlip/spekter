@@ -6,6 +6,7 @@ export type StreamError = { code: string; message: string };
 
 export type StreamHandlers = {
   onDelta: (text: string) => void;
+  onReasoning: (text: string) => void;
   onDone: (model: string) => void;
   onError: (error: StreamError) => void;
 };
@@ -20,7 +21,7 @@ export function toConversation(messages: ChatMessage[]): CoreChatMessage[] {
 
 export async function streamReply(
   messages: CoreChatMessage[],
-  { onDelta, onDone, onError }: StreamHandlers,
+  { onDelta, onReasoning, onDone, onError }: StreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
   const networkError = (error: unknown) => {
@@ -47,6 +48,7 @@ export async function streamReply(
   try {
     for await (const frame of readFrames(response.body)) {
       if (frame.type === "delta") onDelta(frame.text);
+      else if (frame.type === "reasoning") onReasoning(frame.text);
       else if (frame.type === "done") return onDone(frame.model);
       else return onError({ code: frame.code, message: frame.message });
     }

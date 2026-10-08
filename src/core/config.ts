@@ -7,6 +7,10 @@ export type Config = {
 
 type Env = Record<string, string | undefined>;
 
+export function readConfiguredModel(env: Env = process.env): string | null {
+  return env.SPEKTER_MODEL?.trim() || null;
+}
+
 export function readConfig(env: Env = process.env): Config {
   const apiKey = env.OPENROUTER_API_KEY?.trim();
   const model = env.SPEKTER_MODEL?.trim();

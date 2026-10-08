@@ -1,5 +1,11 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { math } from "@streamdown/math";
+import { code } from "@streamdown/code";
+import { Streamdown } from "streamdown";
 import type { ChatMessage } from "./types";
+import {useState, useEffect, useRef} from "react"
+import {Brain, ThumbsUp, ThumbsDown} from "lucide-react"
+import { mermaid } from "@streamdown/mermaid";
 
 function formatTime(createdAt: string) {
   return new Intl.DateTimeFormat("en", {
@@ -38,7 +44,7 @@ function MessageTimestamp({
 }) {
   return (
     <time
-      className={`mt-1.5 px-1 text-[11px] tabular-nums text-slate-400 ${alignment === "left" ? "text-left" : "text-right"}`}
+      className={`text-[11px] tabular-nums text-slate-900 ${alignment === "left" ? "text-left" : "text-right"}`}
       dateTime={createdAt}
     >
       {formatTime(createdAt)}
@@ -46,25 +52,62 @@ function MessageTimestamp({
   );
 }
 
+function ReasoningTrace({message, hideReasoning}: {message: ChatMessage, hideReasoning: boolean}){
+
+  const reasoningRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = reasoningRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [message.reasoning, hideReasoning])
+
+  return(
+    <div className="rounded break-words text-[16px] leading-[1.5] text-black">
+      {message.reasoning && (
+        <div
+          ref={reasoningRef}
+          className={hideReasoning ? "hidden" : message.content ? "leading-[1.25] block pl-4 my-4 border-l border-black/20" : `
+            block max-h-[75px] overflow-auto py-2 my-2 leading-[1.25] pl-2
+            [scrollbar-width:none] [&::-webkit-scrollbar]:hidden
+            [mask-image:linear-gradient(to_bottom,transparent,black_8px,black_calc(100%_-_8px),transparent)]
+          `}
+          >
+            <span className={message.content ? "text-xs" : "bg-gray-50 animate-pulse p-1 rounded-md text-slate-600 text-xs"}>
+              {message.reasoning}
+            </span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function AssistantMessage({ message }: { message: ChatMessage }) {
+  // Reasoning shows while the model thinks and hides once the reply starts, unless the user toggled it.
+  const [showReasoningOverride, setShowReasoningOverride] = useState<boolean | null>(null)
+  const hideReasoning = showReasoningOverride === null ? Boolean(message.content) : !showReasoningOverride
+
   return (
     <article
       aria-label={`Spekter at ${formatTime(message.createdAt)}`}
-      className="flex items-start gap-2 justify-start hover:bg-slate-50 px-2"
+      className="group relative flex items-start gap-2 justify-start hover:bg-slate-50 px-2"
     >
       <Avatar className="mt-1 after:hidden">
         <AvatarImage src="/afryend.jpg" alt="Spekter" />
         <AvatarFallback>SP</AvatarFallback>
       </Avatar>
       <div className="flex min-w-0 flex-1 flex-col p-1">
-        <p className="font-bold font-gg-sans text-green-700">afryend</p>
-        <div className="rounded whitespace-pre-wrap break-words text-[16px] leading-[1.55] text-slate-800">
-          {message.content ||
-            (message.status === "streaming" && (
-              <span aria-label="Spekter is replying" className="animate-pulse text-slate-400">
-                …
-              </span>
-            ))}
+        <div className="flex items-center gap-2 my-auto">
+          <p className="font-bold font-gg-sans text-green-700">afryend</p>
+          <MessageTimestamp createdAt={message.createdAt} alignment="left"/>
+        </div>
+        <ReasoningTrace message={message} hideReasoning={hideReasoning}/>
+        <div className="rounded break-words text-[16px] leading-[1.5] text-black">
+        {(message.content && <Streamdown plugins={{ math, code, mermaid }} className="leading-[1.5]">{message.content}</Streamdown>) ||
+          (message.status === "streaming" && (
+            <span aria-label="Spekter is replying" className="flex items-center animate-pulse text-xs">
+              Thinking…
+            </span>
+        ))}
         </div>
         {message.status === "error" && (
           <p
@@ -74,6 +117,17 @@ export function AssistantMessage({ message }: { message: ChatMessage }) {
             Reply failed: {message.error}
           </p>
         )}
+      </div>
+      <div className="flex items-center group-hover:visible absolute -top-3 invisible right-10 text-black bg-slate-50 border border-gray-100 rounded-md">
+        <button onClick={() => setShowReasoningOverride(hideReasoning)} className="cursor-pointer group/btn p-2 hover:bg-gray-100 rounded h-full w-full transition-all text-gray-800">
+          <Brain className="transition-transform group-hover/btn:scale-110" size={16}/>
+        </button>
+        <button className="cursor-pointer group/btn p-2 hover:bg-gray-100 rounded h-full w-full transition-all text-gray-800">
+          <ThumbsUp className="transition-transform group-hover/btn:scale-110" size={16} />
+        </button>
+        <button className="cursor-pointer group/btn p-2 hover:bg-gray-100 rounded h-full w-full transition-all text-gray-800">
+          <ThumbsDown className="transition-transform group-hover/btn:scale-110" size={16} />
+        </button>
       </div>
     </article>
   );

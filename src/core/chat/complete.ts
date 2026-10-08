@@ -1,6 +1,7 @@
 import { generateText, type FinishReason, type LanguageModel, type ModelMessage } from "ai";
 import { ProviderError } from "../errors";
 import type { ChatMessage } from "./contract";
+import { needsReasoning } from "./reasoning";
 
 const INCOMPLETE_FINISH_REASONS: ReadonlySet<FinishReason> = new Set(["content-filter", "error", "other"]);
 
@@ -8,8 +9,12 @@ const INCOMPLETE_FINISH_REASONS: ReadonlySet<FinishReason> = new Set(["content-f
 export function assembleChatCall(messages: ChatMessage[], model: LanguageModel): {
   model: LanguageModel;
   messages: ModelMessage[];
+  providerOptions: {
+    openrouter: { reasoning: { effort: "medium" | "none" } };
+  };
 } {
-  return { model, messages };
+  const effort = needsReasoning(messages) ? ("medium" as const) : ("none" as const);
+  return { model, messages, providerOptions: { openrouter: { reasoning: { effort } } } };
 }
 
 export function incompleteReplyReason(text: string, finishReason: FinishReason): string | undefined {
