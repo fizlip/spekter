@@ -5,6 +5,7 @@ import { Streamdown } from "streamdown";
 import type { ChatMessage } from "./types";
 import {useState, useEffect, useRef} from "react"
 import {Brain, ThumbsUp, ThumbsDown} from "lucide-react"
+import { mermaid } from "@streamdown/mermaid";
 
 function formatTime(createdAt: string) {
   return new Intl.DateTimeFormat("en", {
@@ -111,7 +112,7 @@ export function AssistantMessage({ message }: { message: ChatMessage }) {
         </div>
         <ReasoningTrace message={message} hideReasoning={hideReasoning}/>
         <div className="rounded break-words text-[16px] leading-[1.5] text-black">
-        {(message.content && <Streamdown plugins={{ math, code }} className="leading-[1.5]">{message.content}</Streamdown>) ||
+        {(message.content && <Streamdown plugins={{ math, code, mermaid }} className="leading-[1.5]">{message.content}</Streamdown>) ||
           (message.status === "streaming" && (
             <span aria-label="Spekter is replying" className="flex items-center animate-pulse text-xs">
               Thinking…
