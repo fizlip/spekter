@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InvalidRequestError, NotConfiguredError, ProviderError } from "../errors";
-import { trackRequest, type RequestLogEntry } from "./request-log";
+import type { ChatStreamFrame } from "../chat/stream-frames";
+import { trackRequest, trackStream, type RequestLogEntry } from "./request-log";
 
 let dir: string;
 let logPath: string;
@@ -99,5 +100,80 @@ describe("trackRequest", () => {
 
     await expect(trackRequest("chat").reply()).resolves.toBeUndefined();
     expect(consoleError).toHaveBeenCalledOnce();
+  });
+});
+
+describe("trackStream", () => {
+  async function* framesOf(frames: ChatStreamFrame[], end?: Error): AsyncGenerator<ChatStreamFrame> {
+    yield* frames;
+    if (end) throw end;
+  }
+
+  async function drain(frames: AsyncGenerator<ChatStreamFrame>) {
+    const out: ChatStreamFrame[] = [];
+    for await (const frame of frames) out.push(frame);
+    return out;
+  }
+
+  async function waitForEntries() {
+    return vi.waitFor(async () => {
+      const entries = await readEntries();
+      expect(entries).toHaveLength(1);
+      return entries;
+    });
+  }
+
+  it("passes frames through unchanged and records a reply on done", async () => {
+    const frames: ChatStreamFrame[] = [
+      { type: "delta", text: "Hi " },
+      { type: "delta", text: "Filip" },
+      { type: "done", model: "openai/gpt-test" },
+    ];
+
+    expect(await drain(trackStream(trackRequest("chat_stream"), framesOf(frames)))).toEqual(frames);
+    expect((await waitForEntries())[0]).toMatchObject({ endpoint: "chat_stream", outcome: "reply" });
+  });
+
+  it("records an error frame as an error with the frame's code", async () => {
+    const frames: ChatStreamFrame[] = [
+      { type: "delta", text: "Hi " },
+      { type: "error", code: "provider_error", message: "upstream exploded" },
+    ];
+
+    expect(await drain(trackStream(trackRequest("chat_stream"), framesOf(frames)))).toEqual(frames);
+    expect((await waitForEntries())[0]).toMatchObject({ outcome: "error", errorCode: "provider_error" });
+  });
+
+  it("does not settle on reasoning frames", async () => {
+    const frames: ChatStreamFrame[] = [
+      { type: "reasoning", text: "thinking" },
+      { type: "done", model: "openai/gpt-test" },
+    ];
+
+    await drain(trackStream(trackRequest("chat_stream"), framesOf(frames)));
+    expect((await waitForEntries())[0]).toMatchObject({ outcome: "reply" });
+  });
+
+  it("records aborted when the consumer cancels mid-stream", async () => {
+    const wrapped = trackStream(trackRequest("chat_stream"), framesOf([{ type: "delta", text: "Hi " }, { type: "delta", text: "more" }]));
+
+    await wrapped.next();
+    await wrapped.return(undefined);
+
+    expect((await waitForEntries())[0]).toMatchObject({ outcome: "aborted" });
+    expect((await readEntries())[0]).not.toHaveProperty("errorCode");
+  });
+
+  it("records aborted when the stream ends without a terminal frame", async () => {
+    await drain(trackStream(trackRequest("chat_stream"), framesOf([{ type: "delta", text: "Hi " }])));
+
+    expect((await waitForEntries())[0]).toMatchObject({ outcome: "aborted" });
+  });
+
+  it("records internal_error and rethrows when the inner stream throws", async () => {
+    const wrapped = trackStream(trackRequest("chat_stream"), framesOf([], new Error("boom")));
+
+    await expect(drain(wrapped)).rejects.toThrow("boom");
+    expect((await waitForEntries())[0]).toMatchObject({ outcome: "error", errorCode: "internal_error" });
   });
 });

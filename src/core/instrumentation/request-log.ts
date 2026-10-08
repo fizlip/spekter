@@ -1,5 +1,6 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import type { ChatStreamFrame } from "../chat/stream-frames";
 import { readConfiguredModel } from "../config";
 import { SpekterError, type ErrorCode } from "../errors";
 
@@ -46,6 +47,26 @@ export function trackRequest(endpoint: RequestEndpoint): RequestTracker {
     fail: (error) => settle("error", error instanceof SpekterError ? error.code : "internal_error"),
     abort: () => settle("aborted"),
   };
+}
+
+// Passes frames through untouched and settles the tracker from the terminal frame; a stream
+// that ends or is cancelled without one was stopped by the client. Writes are not awaited.
+export async function* trackStream(
+  tracker: RequestTracker,
+  frames: AsyncGenerator<ChatStreamFrame>,
+): AsyncGenerator<ChatStreamFrame> {
+  try {
+    for await (const frame of frames) {
+      if (frame.type === "done") void tracker.reply();
+      else if (frame.type === "error") void tracker.fail(new SpekterError(frame.code, frame.message));
+      yield frame;
+    }
+  } catch (error) {
+    void tracker.fail(error);
+    throw error;
+  } finally {
+    void tracker.abort();
+  }
 }
 
 // Never rejects: a failed write must not change or delay the caller's reply.
