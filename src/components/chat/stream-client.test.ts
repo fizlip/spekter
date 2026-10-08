@@ -69,6 +69,25 @@ describe("streamReply", () => {
       deltas: ["Your name ", "is Filip."],
       errors: [],
       done: ["openai/gpt-test"],
+      reasonings: [],
+    });
+  });
+
+  it("delivers reasoning frames separately from the reply text", async () => {
+    stubFetch(
+      ndjsonResponse([
+        '{"type":"reasoning","text":"The user said "}\n',
+        '{"type":"reasoning","text":"their name."}\n',
+        '{"type":"delta","text":"Filip."}\n',
+        '{"type":"done","model":"m"}\n',
+      ]),
+    );
+
+    expect(await run()).toEqual({
+      deltas: ["Filip."],
+      errors: [],
+      done: ["m"],
+      reasonings: ["The user said ", "their name."],
     });
   });
 
@@ -77,7 +96,7 @@ describe("streamReply", () => {
       ndjsonResponse(['{"type":"delta","te', 'xt":"Hé"}\n{"type":"delta","text":"llo"}\n{"type":"do', 'ne","model":"m"}\n']),
     );
 
-    expect(await run()).toEqual({ deltas: ["Hé", "llo"], errors: [], done: ["m"] });
+    expect(await run()).toEqual({ deltas: ["Hé", "llo"], errors: [], done: ["m"], reasonings: [] });
   });
 
   it("reports a mid-stream error frame after the deltas already delivered, and never done", async () => {
@@ -92,6 +111,7 @@ describe("streamReply", () => {
       deltas: ["Your name "],
       errors: [{ code: "provider_error", message: "upstream exploded" }],
       done: [],
+      reasonings: [],
     });
   });
 
@@ -102,7 +122,7 @@ describe("streamReply", () => {
   ])("reports a %i JSON error response with its code and message", async (status, code, message) => {
     stubFetch(Response.json({ error: { code, message } }, { status }));
 
-    expect(await run()).toEqual({ deltas: [], errors: [{ code, message }], done: [] });
+    expect(await run()).toEqual({ deltas: [], errors: [{ code, message }], done: [], reasonings: [] });
   });
 
   it("reports a connection error when the stream ends without done or error", async () => {
@@ -138,6 +158,7 @@ describe("streamReply", () => {
       deltas: ["Your "],
       errors: [{ code: "network_error", message: "network connection lost" }],
       done: [],
+      reasonings: [],
     });
   });
 
@@ -148,7 +169,7 @@ describe("streamReply", () => {
       throw new DOMException("The operation was aborted.", "AbortError");
     });
 
-    expect(await run(controller.signal)).toEqual({ deltas: [], errors: [], done: [] });
+    expect(await run(controller.signal)).toEqual({ deltas: [], errors: [], done: [], reasonings: [] });
   });
 });
 
