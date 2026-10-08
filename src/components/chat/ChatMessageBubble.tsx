@@ -82,19 +82,9 @@ function ReasoningTrace({message, hideReasoning}: {message: ChatMessage, hideRea
 }
 
 export function AssistantMessage({ message }: { message: ChatMessage }) {
-  const [hideReasoning, setHideReasoning] = useState(false)
-  const reasoningRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if(message.content){
-      setHideReasoning(true)
-    }
-  }, [message.content])
-
-  useEffect(() => {
-    const el = reasoningRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [message.reasoning, hideReasoning])
+  // Reasoning shows while the model thinks and hides once the reply starts, unless the user toggled it.
+  const [showReasoningOverride, setShowReasoningOverride] = useState<boolean | null>(null)
+  const hideReasoning = showReasoningOverride === null ? Boolean(message.content) : !showReasoningOverride
 
   return (
     <article
@@ -129,7 +119,7 @@ export function AssistantMessage({ message }: { message: ChatMessage }) {
         )}
       </div>
       <div className="flex items-center group-hover:visible absolute -top-3 invisible right-10 text-black bg-slate-50 border border-gray-100 rounded-md">
-        <button onClick={() => setHideReasoning(p => !p)} className="cursor-pointer group/btn p-2 hover:bg-gray-100 rounded h-full w-full transition-all text-gray-800">
+        <button onClick={() => setShowReasoningOverride(hideReasoning)} className="cursor-pointer group/btn p-2 hover:bg-gray-100 rounded h-full w-full transition-all text-gray-800">
           <Brain className="transition-transform group-hover/btn:scale-110" size={16}/>
         </button>
         <button className="cursor-pointer group/btn p-2 hover:bg-gray-100 rounded h-full w-full transition-all text-gray-800">
