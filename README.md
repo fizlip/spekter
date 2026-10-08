@@ -72,6 +72,44 @@ The response is `application/x-ndjson`: one JSON frame per line.
 
 Every stream ends with exactly one `done` or `error` frame. Problems found before streaming starts (bad request, missing config) return the same JSON errors and statuses as `POST /api/chat`. A failure after streaming starts, such as the provider breaking off or returning an empty or cut-off reply, arrives as an `error` frame with code `provider_error`, because the 200 status has already been sent. Closing the connection cancels the model call.
 
+### Request log
+
+Every request that reaches either chat endpoint appends one JSON line to `logs/requests.jsonl` (gitignored; set `SPEKTER_REQUEST_LOG` to write elsewhere). Entries hold metrics only, never message content:
+
+```json
+{"timestamp":"2026-10-08T10:00:00.000Z","endpoint":"chat_stream","model":"anthropic/claude-haiku-4.5","outcome":"reply","durationMs":1834}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `timestamp` | When the request arrived (UTC) |
+| `endpoint` | `chat` or `chat_stream` |
+| `model` | `SPEKTER_MODEL` at the time, or `null` if unset |
+| `outcome` | `reply`, `error`, or `aborted` (the client closed a stream before it finished) |
+| `errorCode` | Only on errors: one of the error codes above |
+| `durationMs` | Time until the reply completed, failed, or was stopped |
+
+Requests turned away by the localhost and JSON checks above (`403 forbidden`, or `400` for a missing `Content-Type`) never reach an endpoint and are not logged.
+
+Success rate and median latency per model, leaving out aborted requests:
+
+```bash
+python3 - <<'EOF'
+import json, statistics, collections
+by_model = collections.defaultdict(list)
+for line in open("logs/requests.jsonl"):
+    entry = json.loads(line)
+    if entry["outcome"] != "aborted":
+        by_model[entry["model"]].append(entry)
+for model, entries in by_model.items():
+    replies = [e["durationMs"] for e in entries if e["outcome"] == "reply"]
+    median = statistics.median(replies) if replies else None
+    print(f"{model}: {len(entries)} requests, {len(replies) / len(entries):.0%} success, median {median} ms")
+EOF
+```
+
+A log line that cannot be written is reported on the server console and never affects the reply.
+
 ## Development
 
 ```bash
