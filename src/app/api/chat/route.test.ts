@@ -4,11 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createOpenRouterModel } from "@/core/models/openrouter";
 import { failingModel, replyingModel } from "@/core/testing/mock-model";
 import { POST } from "./route";
-import { useTempRequestLog, waitForLogEntries } from "@/core/testing/request-log";
+import { withTempRequestLog, waitForLogEntries } from "@/core/testing/request-log";
 
 vi.mock("@/core/models/openrouter", () => ({ createOpenRouterModel: vi.fn() }));
 
-const log = useTempRequestLog();
+const log = withTempRequestLog();
 
 const conversation = {
   messages: [

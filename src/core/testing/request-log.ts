@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, vi } from "vitest";
 import type { RequestLogEntry } from "../instrumentation/request-log";
 
 // Points SPEKTER_REQUEST_LOG at a fresh temp file per test so no test writes into the repo.
-export function useTempRequestLog() {
+export function withTempRequestLog() {
   let dir = "";
   const log = { path: "", dir: "" };
 
