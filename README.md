@@ -74,7 +74,7 @@ Every stream ends with exactly one `done` or `error` frame. Problems found befor
 
 ### Request log
 
-Every request to either chat endpoint appends one JSON line to `logs/requests.jsonl` (gitignored; set `SPEKTER_REQUEST_LOG` to write elsewhere). Entries hold metrics only, never message content:
+Every request that reaches either chat endpoint appends one JSON line to `logs/requests.jsonl` (gitignored; set `SPEKTER_REQUEST_LOG` to write elsewhere). Entries hold metrics only, never message content:
 
 ```json
 {"timestamp":"2026-10-08T10:00:00.000Z","endpoint":"chat_stream","model":"anthropic/claude-haiku-4.5","outcome":"reply","durationMs":1834}
@@ -87,7 +87,9 @@ Every request to either chat endpoint appends one JSON line to `logs/requests.js
 | `model` | `SPEKTER_MODEL` at the time, or `null` if unset |
 | `outcome` | `reply`, `error`, or `aborted` (the client closed a stream before it finished) |
 | `errorCode` | Only on errors: one of the error codes above |
-| `durationMs` | Time until the reply completed or failed |
+| `durationMs` | Time until the reply completed, failed, or was stopped |
+
+Requests turned away by the localhost and JSON checks above (`403 forbidden`, or `400` for a missing `Content-Type`) never reach an endpoint and are not logged.
 
 Success rate and median latency per model, leaving out aborted requests:
 
