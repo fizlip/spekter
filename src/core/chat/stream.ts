@@ -28,6 +28,9 @@ export async function* streamChat(
           text += part.text;
           yield { type: "delta", text: part.text };
           break;
+        case "reasoning-delta":
+          yield { type: "reasoning", text: part.text };
+          break;
         case "error":
           if (abortSignal?.aborted) return;
           yield errorFrame(toProviderError(part.error));

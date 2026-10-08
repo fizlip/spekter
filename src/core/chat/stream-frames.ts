@@ -2,6 +2,7 @@ import type { ErrorCode } from "../errors";
 
 export type ChatStreamFrame =
   | { type: "delta"; text: string }
+  | { type: "reasoning"; text: string }
   | { type: "error"; code: ErrorCode; message: string }
   | { type: "done"; model: string };
 

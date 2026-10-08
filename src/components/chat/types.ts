@@ -6,4 +6,5 @@ export type ChatMessage = {
   // Set only on an assistant reply that is still arriving or that failed.
   status?: "streaming" | "error";
   error?: string;
+  reasoning?: string;
 };

@@ -56,6 +56,7 @@ export function ChatInterface({
       toConversation([...messages, userMessage]),
       {
         onDelta: (text) => updateReply((reply) => ({ content: reply.content + text })),
+        onReasoning: (text) => updateReply((reply) => ({ reasoning: (reply.reasoning ?? "") + text })),
         onDone: () => updateReply(() => ({ status: undefined })),
         onError: ({ message }) => updateReply(() => ({ status: "error", error: message })),
       },

@@ -25,16 +25,18 @@ async function run(signal?: AbortSignal) {
   const deltas: string[] = [];
   const errors: StreamError[] = [];
   const done: string[] = [];
+  const reasonings: string[] = [];
   await streamReply(
     conversation,
     {
       onDelta: (text) => deltas.push(text),
       onError: (error) => errors.push(error),
       onDone: (model) => done.push(model),
+      onReasoning: (reasoning) => reasonings.push(reasoning),
     },
     signal,
   );
-  return { deltas, errors, done };
+  return { deltas, errors, done, reasonings };
 }
 
 afterEach(() => {
