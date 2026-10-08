@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readConfig } from "./config";
+import { readConfig, readConfiguredModel } from "./config";
 import { NotConfiguredError } from "./errors";
 
 describe("readConfig", () => {
@@ -31,5 +31,15 @@ describe("readConfig", () => {
     expect(() => readConfig({ OPENROUTER_API_KEY: "", SPEKTER_MODEL: "  " })).toThrow(
       NotConfiguredError,
     );
+  });
+});
+
+describe("readConfiguredModel", () => {
+  it("returns the trimmed model id when set", () => {
+    expect(readConfiguredModel({ SPEKTER_MODEL: " openai/gpt-test " })).toBe("openai/gpt-test");
+  });
+
+  it.each([["unset", {}], ["whitespace", { SPEKTER_MODEL: "  " }]])("returns null when %s", (_label, env) => {
+    expect(readConfiguredModel(env)).toBeNull();
   });
 });
