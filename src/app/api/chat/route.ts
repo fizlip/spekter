@@ -1,5 +1,6 @@
 import { completeChat } from "@/core/chat/complete";
 import type { ChatResponse } from "@/core/chat/contract";
+import { readSystemPrompt } from "@/core/chat/system-prompt";
 import { readConfig } from "@/core/config";
 import { trackRequest } from "@/core/instrumentation/request-log";
 import { createOpenRouterModel } from "@/core/models/openrouter";
@@ -10,7 +11,8 @@ export async function POST(request: Request) {
   try {
     const messages = await readChatMessages(request);
     const config = readConfig();
-    const content = await completeChat(messages, createOpenRouterModel(config));
+    const systemPrompt = await readSystemPrompt();
+    const content = await completeChat(messages, createOpenRouterModel(config), systemPrompt);
     void tracker.reply();
 
     return Response.json({

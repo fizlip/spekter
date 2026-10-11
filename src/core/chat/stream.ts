@@ -11,10 +11,11 @@ function errorFrame({ code, message }: SpekterError): ChatStreamFrame {
 export async function* streamChat(
   messages: ChatMessage[],
   model: LanguageModel,
+  systemPrompt?: string | null,
   abortSignal?: AbortSignal,
 ): AsyncGenerator<ChatStreamFrame> {
   const result = streamText({
-    ...assembleChatCall(messages, model),
+    ...assembleChatCall(messages, model, systemPrompt),
     abortSignal,
     // Failures are reported to the caller as error frames below, not logged.
     onError: () => {},

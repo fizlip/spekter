@@ -1,4 +1,6 @@
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { LanguageModel } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createOpenRouterModel } from "@/core/models/openrouter";
@@ -30,12 +32,16 @@ function stubOpenRouterModel(model: LanguageModel) {
   vi.mocked(createOpenRouterModel).mockReturnValue(model);
 }
 
-beforeEach(() => {
+let promptDir: string;
+
+beforeEach(async () => {
+  promptDir = await mkdtemp(join(tmpdir(), "spekter-system-prompt-route-"));
   vi.stubEnv("OPENROUTER_API_KEY", "sk-test");
   vi.stubEnv("SPEKTER_MODEL", "openai/gpt-test");
 });
 
-afterEach(() => {
+afterEach(async () => {
+  await rm(promptDir, { recursive: true, force: true });
   vi.unstubAllEnvs();
   vi.mocked(createOpenRouterModel).mockReset();
 });
@@ -68,6 +74,54 @@ describe("POST /api/chat", () => {
     expect(body.error.message).toContain("OPENROUTER_API_KEY");
     expect(body).not.toHaveProperty("message");
     expect(createOpenRouterModel).not.toHaveBeenCalled();
+  });
+
+  it("sends the configured system prompt to the model and keeps the success shape", async () => {
+    const path = join(promptDir, "prompt.md");
+    await writeFile(path, "Answer in exactly one word.");
+    vi.stubEnv("SPEKTER_SYSTEM_PROMPT", path);
+    const model = replyingModel("Word.");
+    stubOpenRouterModel(model);
+
+    const response = await POST(chatRequest(conversation));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      message: { role: "assistant", content: "Word." },
+      model: "openai/gpt-test",
+    });
+    expect(model.doGenerateCalls[0].prompt[0]).toEqual({
+      role: "system",
+      content: "Answer in exactly one word.",
+    });
+  });
+
+  it("returns 503 not_configured naming the file without calling the model when the prompt file is missing", async () => {
+    vi.stubEnv("SPEKTER_SYSTEM_PROMPT", join(promptDir, "missing.md"));
+
+    const response = await POST(chatRequest(conversation));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error.code).toBe("not_configured");
+    expect(body.error.message).toContain("missing.md");
+    expect(body).not.toHaveProperty("message");
+    expect(createOpenRouterModel).not.toHaveBeenCalled();
+  });
+
+  it("behaves as if unset when the configured prompt file is empty", async () => {
+    const path = join(promptDir, "empty.md");
+    await writeFile(path, "  \n");
+    vi.stubEnv("SPEKTER_SYSTEM_PROMPT", path);
+    const model = replyingModel("ok");
+    stubOpenRouterModel(model);
+
+    await POST(chatRequest(conversation));
+
+    expect(model.doGenerateCalls[0].prompt[0]).toEqual({
+      role: "user",
+      content: [{ type: "text", text: "My name is Filip." }],
+    });
   });
 
   it("returns 400 invalid_request without calling the model for an empty conversation", async () => {
