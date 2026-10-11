@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { LanguageModel } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createOpenRouterModel } from "@/core/models/openrouter";
@@ -44,12 +47,16 @@ async function readFrames(response: Response) {
     .map((line) => JSON.parse(line));
 }
 
-beforeEach(() => {
+let promptDir: string;
+
+beforeEach(async () => {
+  promptDir = await mkdtemp(join(tmpdir(), "spekter-system-prompt-route-"));
   vi.stubEnv("OPENROUTER_API_KEY", "sk-test");
   vi.stubEnv("SPEKTER_MODEL", "openai/gpt-test");
 });
 
-afterEach(() => {
+afterEach(async () => {
+  await rm(promptDir, { recursive: true, force: true });
   vi.unstubAllEnvs();
   vi.mocked(createOpenRouterModel).mockReset();
 });
@@ -79,6 +86,53 @@ describe("POST /api/chat/stream", () => {
     expect(response.headers.get("content-type")).toContain("application/json");
     expect((await response.json()).error.code).toBe("not_configured");
     expect(createOpenRouterModel).not.toHaveBeenCalled();
+  });
+
+  it("streams the configured system prompt to the model without changing the frames", async () => {
+    const path = join(promptDir, "prompt.md");
+    await writeFile(path, "Answer in exactly one word.");
+    vi.stubEnv("SPEKTER_SYSTEM_PROMPT", path);
+    const model = streamingModel([...textParts(["Your name ", "is Filip."]), finishPart()], "openai/gpt-test");
+    stubOpenRouterModel(model);
+
+    const response = await POST(streamRequest(conversation));
+
+    expect(response.status).toBe(200);
+    expect(await readFrames(response)).toEqual([
+      { type: "delta", text: "Your name " },
+      { type: "delta", text: "is Filip." },
+      { type: "done", model: "openai/gpt-test" },
+    ]);
+    expect(model.doStreamCalls[0].prompt[0]).toEqual({
+      role: "system",
+      content: "Answer in exactly one word.",
+    });
+  });
+
+  it("returns the 503 not_configured JSON error before the stream starts when the prompt file is missing", async () => {
+    vi.stubEnv("SPEKTER_SYSTEM_PROMPT", join(promptDir, "missing.md"));
+
+    const response = await POST(streamRequest(conversation));
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect((await response.json()).error.code).toBe("not_configured");
+    expect(createOpenRouterModel).not.toHaveBeenCalled();
+  });
+
+  it("behaves as if unset when the configured prompt file is empty", async () => {
+    const path = join(promptDir, "empty.md");
+    await writeFile(path, "  \n");
+    vi.stubEnv("SPEKTER_SYSTEM_PROMPT", path);
+    const model = streamingModel([...textParts(["ok"]), finishPart()]);
+    stubOpenRouterModel(model);
+
+    await readFrames(await POST(streamRequest(conversation)));
+
+    expect(model.doStreamCalls[0].prompt[0]).toEqual({
+      role: "user",
+      content: [{ type: "text", text: "My name is Filip." }],
+    });
   });
 
   it.each([

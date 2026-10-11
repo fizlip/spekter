@@ -46,6 +46,19 @@ describe("streamChat", () => {
     expect(call.tools).toBeUndefined();
   });
 
+  it("prepends the system prompt verbatim before the caller's messages", async () => {
+    const model = streamingModel([...textParts(["ok"]), finishPart()]);
+    await collect(streamChat(conversation, model, "# Be terse.\n"));
+
+    const [call] = model.doStreamCalls;
+    expect(call.prompt).toEqual([
+      { role: "system", content: "# Be terse.\n" },
+      { role: "user", content: [{ type: "text", text: "My name is Filip." }] },
+      { role: "assistant", content: [{ type: "text", text: "Nice to meet you, Filip." }] },
+      { role: "user", content: [{ type: "text", text: "What is my name?" }] },
+    ]);
+  });
+
   it("still completes when the model stops at its length limit", async () => {
     const model = streamingModel([...textParts(["A long answ"]), finishPart("length")], "m");
 
@@ -105,7 +118,7 @@ describe("streamChat", () => {
     const model = hangingModel(textParts(["Your name "]).slice(0, 2));
     const frames: ChatStreamFrame[] = [];
 
-    for await (const frame of streamChat(conversation, model, controller.signal)) {
+    for await (const frame of streamChat(conversation, model, null, controller.signal)) {
       frames.push(frame);
       controller.abort();
     }

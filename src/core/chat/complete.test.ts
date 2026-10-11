@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ProviderError } from "../errors";
 import { failingModel, replyingModel } from "../testing/mock-model";
-import { completeChat } from "./complete";
+import { assembleChatCall, completeChat } from "./complete";
 import type { ChatMessage } from "./contract";
 
 const conversation: ChatMessage[] = [
@@ -28,6 +28,30 @@ describe("completeChat", () => {
       { role: "user", content: [{ type: "text", text: "What is my name?" }] },
     ]);
     expect(call.tools).toBeUndefined();
+  });
+
+  it("prepends the system prompt verbatim before the caller's messages", async () => {
+    const model = replyingModel("ok");
+    await completeChat(conversation, model, "# Be terse.\n");
+
+    const [call] = model.doGenerateCalls;
+    expect(call.prompt).toEqual([
+      { role: "system", content: "# Be terse.\n" },
+      { role: "user", content: [{ type: "text", text: "My name is Filip." }] },
+      { role: "assistant", content: [{ type: "text", text: "Nice to meet you, Filip." }] },
+      { role: "user", content: [{ type: "text", text: "What is my name?" }] },
+    ]);
+  });
+
+  it("derives the reasoning effort from the last caller message, not the system prompt", () => {
+    const short = [{ role: "user", content: "Hi" }] satisfies ChatMessage[];
+    const long = [{ role: "user", content: "Please think carefully about this question" }] satisfies ChatMessage[];
+
+    const withLongPrompt = assembleChatCall(short, replyingModel("ok"), "# A long system prompt full of words");
+    expect(withLongPrompt.providerOptions.openrouter.reasoning.effort).toBe("none");
+
+    const withNoPrompt = assembleChatCall(long, replyingModel("ok"), null);
+    expect(withNoPrompt.providerOptions.openrouter.reasoning.effort).toBe("medium");
   });
 
   it("wraps model failures in a ProviderError with the original message", async () => {

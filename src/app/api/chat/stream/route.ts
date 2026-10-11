@@ -1,5 +1,6 @@
 import { streamChat } from "@/core/chat/stream";
 import { serializeFrame, STREAM_CONTENT_TYPE } from "@/core/chat/stream-frames";
+import { readSystemPrompt } from "@/core/chat/system-prompt";
 import { readConfig } from "@/core/config";
 import { trackRequest, trackStream } from "@/core/instrumentation/request-log";
 import { createOpenRouterModel } from "@/core/models/openrouter";
@@ -11,7 +12,12 @@ export async function POST(request: Request) {
   const tracker = trackRequest("chat_stream");
   try {
     const messages = await readChatMessages(request);
-    const frames = trackStream(tracker, streamChat(messages, createOpenRouterModel(readConfig()), request.signal));
+    const config = readConfig();
+    const systemPrompt = await readSystemPrompt();
+    const frames = trackStream(
+      tracker,
+      streamChat(messages, createOpenRouterModel(config), systemPrompt, request.signal),
+    );
     const encoder = new TextEncoder();
 
     const body = new ReadableStream<Uint8Array>({
