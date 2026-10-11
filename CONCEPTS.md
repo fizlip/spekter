@@ -17,3 +17,7 @@ A Brick can be replaced without changing the Core or any Interface; third-party 
 ### Interface
 Any client through which Filip talks to the Core, such as the web chat, a command-line call, or a messaging bot.
 Every Interface uses the same contract with the Core and gets no special treatment, so adding or removing one never changes the Core.
+
+### Assembly point
+The single core function where the model call is assembled — messages, model, and provider options brought together for both chat endpoints.
+Instructions, knowledge, and tools attach there, so every Interface gets them without changing the caller contract.
