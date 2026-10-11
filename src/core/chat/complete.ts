@@ -12,6 +12,7 @@ export function assembleChatCall(
   systemPrompt?: string | null,
 ): {
   model: LanguageModel;
+  system?: string;
   messages: ModelMessage[];
   providerOptions: {
     openrouter: { reasoning: { effort: "medium" | "none" } };
@@ -20,7 +21,8 @@ export function assembleChatCall(
   const effort = needsReasoning(messages) ? ("medium" as const) : ("none" as const);
   return {
     model,
-    messages: systemPrompt ? [{ role: "system", content: systemPrompt }, ...messages] : messages,
+    system: systemPrompt ?? undefined,
+    messages,
     providerOptions: { openrouter: { reasoning: { effort } } },
   };
 }
