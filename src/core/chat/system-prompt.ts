@@ -1,8 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import type { Env } from "../config";
 import { NotConfiguredError } from "../errors";
-
-type Env = Record<string, string | undefined>;
 
 // Reads the configured system-prompt file per request: unset or blank means no prompt,
 // and a configured file that cannot be read is a configuration error, never a silent drop.

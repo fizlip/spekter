@@ -5,7 +5,7 @@ export type Config = {
   model: string;
 };
 
-type Env = Record<string, string | undefined>;
+export type Env = Record<string, string | undefined>;
 
 export function readConfiguredModel(env: Env = process.env): string | null {
   return env.SPEKTER_MODEL?.trim() || null;
