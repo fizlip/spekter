@@ -29,7 +29,7 @@ export function useChatSession() {
 
 // Keying on the chat id remounts ChatInterface for every new chat, which resets all of its
 // state and aborts any reply still streaming. Only the first chat shows the seeded messages.
-export function ActiveChat({ initialMessages, todayKey }: { initialMessages: ChatMessage[]; todayKey: string }) {
+export function ActiveChat({ initialMessages, todayKey, model }: { initialMessages: ChatMessage[]; todayKey: string; model: string | null }) {
   const { chatId } = useChatSession();
 
   return (
@@ -37,6 +37,7 @@ export function ActiveChat({ initialMessages, todayKey }: { initialMessages: Cha
       initialMessages={chatId === INITIAL_CHAT_ID ? initialMessages : []}
       key={chatId}
       todayKey={todayKey}
+      model={model}
     />
   );
 }

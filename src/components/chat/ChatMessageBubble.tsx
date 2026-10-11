@@ -72,6 +72,10 @@ function ReasoningTrace({message, hideReasoning}: {message: ChatMessage, hideRea
             [mask-image:linear-gradient(to_bottom,transparent,black_8px,black_calc(100%_-_8px),transparent)]
           `}
           >
+            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-black">
+              <Brain size={12}/>
+              <p>Reasoning</p>
+            </div>
             <span className={message.content ? "text-xs" : "bg-gray-50 animate-pulse p-1 rounded-md text-slate-600 text-xs"}>
               {message.reasoning}
             </span>
@@ -89,20 +93,19 @@ export function AssistantMessage({ message }: { message: ChatMessage }) {
   return (
     <article
       aria-label={`Spekter at ${formatTime(message.createdAt)}`}
-      className="group relative flex items-start gap-2 justify-start hover:bg-slate-50 px-2"
+      className="group relative flex items-start gap-2 justify-start px-2"
     >
       <Avatar className="mt-1 after:hidden">
-        <AvatarImage src="/afryend.jpg" alt="Spekter" />
+        <AvatarImage src="/afry.png" alt="Spekter" />
         <AvatarFallback>SP</AvatarFallback>
       </Avatar>
       <div className="flex min-w-0 flex-1 flex-col p-1">
         <div className="flex items-center gap-2 my-auto">
-          <p className="font-bold font-gg-sans text-green-700">afryend</p>
           <MessageTimestamp createdAt={message.createdAt} alignment="left"/>
         </div>
         <ReasoningTrace message={message} hideReasoning={hideReasoning}/>
         <div className="rounded break-words text-[16px] leading-[1.5] text-black">
-        {(message.content && <Streamdown plugins={{ math, code, mermaid }} className="leading-[1.5]">{message.content}</Streamdown>) ||
+        {(message.content && <Streamdown plugins={{ math, code, mermaid }} className="leading-[1.4]">{message.content}</Streamdown>) ||
           (message.status === "streaming" && (
             <span aria-label="Spekter is replying" className="flex items-center animate-pulse text-xs">
               Thinking…
@@ -137,7 +140,7 @@ export function UserMessage({ message }: { message: ChatMessage }) {
   return (
     <article
       aria-label={`You at ${formatTime(message.createdAt)}`}
-      className="flex items-start gap-2 justify-start hover:bg-slate-50 px-2"
+      className="flex items-start gap-2 justify-start px-2"
     >
       <Avatar className="mt-1">
         <AvatarFallback>A</AvatarFallback>

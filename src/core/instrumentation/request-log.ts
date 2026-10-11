@@ -1,4 +1,4 @@
-import { appendFile, mkdir } from "node:fs/promises";
+import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { ChatStreamFrame } from "../chat/stream-frames";
 import { readConfiguredModel } from "../config";
@@ -70,9 +70,31 @@ export async function* trackStream(
   }
 }
 
+function logPath() {
+  return resolve(process.env.SPEKTER_REQUEST_LOG?.trim() || DEFAULT_LOG_PATH);
+}
+
+// A missing file reads as empty; malformed lines are skipped rather than failing the read.
+export async function readRequestLog(): Promise<RequestLogEntry[]> {
+  let content: string;
+  try {
+    content = await readFile(logPath(), "utf-8");
+  } catch {
+    return [];
+  }
+  const entries: RequestLogEntry[] = [];
+  for (const line of content.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      entries.push(JSON.parse(line));
+    } catch {}
+  }
+  return entries;
+}
+
 // Never rejects: a failed write must not change or delay the caller's reply.
 async function writeEntry(entry: RequestLogEntry): Promise<void> {
-  const path = resolve(process.env.SPEKTER_REQUEST_LOG?.trim() || DEFAULT_LOG_PATH);
+  const path = logPath();
   try {
     await mkdir(dirname(path), { recursive: true });
     await appendFile(path, `${JSON.stringify(entry)}\n`);
