@@ -16,6 +16,8 @@ The dev server listens on `http://127.0.0.1:3000` only, so nothing on your netwo
 
 `POST /api/chat` takes a conversation and returns the assistant's next reply as one complete message. It is stateless: send the full history every time. The model is set by `SPEKTER_MODEL` in `.env.local`.
 
+The model's instructions come from one markdown file, pointed at by `SPEKTER_SYSTEM_PROMPT` and read fresh on every request, so editing the file takes effect on the next request with no restart. Both endpoints get the same instructions. Unset or an empty file sends no instructions, exactly as before; a configured file that cannot be read fails as `not_configured`, naming the file.
+
 ```bash
 curl -s http://127.0.0.1:3000/api/chat \
   -H 'content-type: application/json' \
@@ -42,7 +44,7 @@ Errors always have the shape `{ "error": { "code", "message" } }`:
 | --- | --- | --- |
 | 400 | `invalid_request` | Body is not JSON or the conversation breaks the rules above |
 | 403 | `forbidden` | The request was not addressed to `127.0.0.1` or `localhost` |
-| 503 | `not_configured` | `OPENROUTER_API_KEY` or `SPEKTER_MODEL` is missing |
+| 503 | `not_configured` | `OPENROUTER_API_KEY` or `SPEKTER_MODEL` is missing, or the `SPEKTER_SYSTEM_PROMPT` file cannot be read |
 | 502 | `provider_error` | OpenRouter or the model failed, or the model returned an empty or cut-off reply; the message says why |
 | 500 | `internal_error` | Something unexpected went wrong on the server |
 
