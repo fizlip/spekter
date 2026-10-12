@@ -21,3 +21,7 @@ Every Interface uses the same contract with the Core and gets no special treatme
 ### Assembly point
 The single core function where the model call is assembled — messages, model, and provider options brought together for both chat endpoints.
 Instructions, knowledge, and tools attach there, so every Interface gets them without changing the caller contract.
+
+### Source
+Something external that went into a reply, such as a knowledge note given to the model; every successful reply lists its sources.
+Each source names its kind, so new knowledge Bricks and tools add new kinds rather than new response fields.

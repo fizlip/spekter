@@ -1,6 +1,6 @@
 import { streamText, type LanguageModel } from "ai";
 import type { SpekterError } from "../errors";
-import { assembleChatCall, incompleteReplyReason, toProviderError } from "./complete";
+import { assembleChatCall, incompleteReplyReason, knowledgeSources, toProviderError, type ChatContext } from "./complete";
 import type { ChatMessage } from "./contract";
 import type { ChatStreamFrame } from "./stream-frames";
 
@@ -11,11 +11,11 @@ function errorFrame({ code, message }: SpekterError): ChatStreamFrame {
 export async function* streamChat(
   messages: ChatMessage[],
   model: LanguageModel,
-  systemPrompt?: string | null,
+  context: ChatContext = {},
   abortSignal?: AbortSignal,
 ): AsyncGenerator<ChatStreamFrame> {
   const result = streamText({
-    ...assembleChatCall(messages, model, systemPrompt),
+    ...assembleChatCall(messages, model, context),
     abortSignal,
     // Failures are reported to the caller as error frames below, not logged.
     onError: () => {},
@@ -34,7 +34,7 @@ export async function* streamChat(
           break;
         case "error":
           if (abortSignal?.aborted) return;
-          yield errorFrame(toProviderError(part.error));
+          yield errorFrame(toProviderError(part.error, context.knowledge));
           return;
         case "abort":
           return;
@@ -42,13 +42,17 @@ export async function* streamChat(
           const problem = incompleteReplyReason(text, part.finishReason);
           yield problem
             ? { type: "error", code: "provider_error", message: problem }
-            : { type: "done", model: typeof model === "string" ? model : model.modelId };
+            : {
+                type: "done",
+                model: typeof model === "string" ? model : model.modelId,
+                sources: knowledgeSources(context.knowledge),
+              };
           return;
         }
       }
     }
   } catch (error) {
     if (abortSignal?.aborted) return;
-    yield errorFrame(toProviderError(error));
+    yield errorFrame(toProviderError(error, context.knowledge));
   }
 }

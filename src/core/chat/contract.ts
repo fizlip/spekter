@@ -18,9 +18,13 @@ const chatRequestSchema = z.object({
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
 
+// Something external that went into a reply; each kind of source gets its own `type`.
+export type Source = { type: "knowledge_file"; path: string };
+
 export type ChatResponse = {
   message: { role: "assistant"; content: string };
   model: string;
+  sources: Source[];
 };
 
 export function parseChatRequest(body: unknown): ChatRequest {

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LanguageModel } from "ai";
@@ -56,6 +56,7 @@ describe("POST /api/chat", () => {
     expect(await response.json()).toEqual({
       message: { role: "assistant", content: "Your name is Filip." },
       model: "openai/gpt-test",
+      sources: [],
     });
     expect(createOpenRouterModel).toHaveBeenCalledWith({
       apiKey: "sk-test",
@@ -89,6 +90,7 @@ describe("POST /api/chat", () => {
     expect(await response.json()).toEqual({
       message: { role: "assistant", content: "Word." },
       model: "openai/gpt-test",
+      sources: [],
     });
     expect(model.doGenerateCalls[0].prompt[0]).toEqual({
       role: "system",
@@ -122,6 +124,57 @@ describe("POST /api/chat", () => {
       role: "user",
       content: [{ type: "text", text: "My name is Filip." }],
     });
+  });
+
+  it("sends the configured knowledge notes to the model and lists them as sources", async () => {
+    const notesDir = join(promptDir, "notes");
+    await mkdir(join(notesDir, "projects"), { recursive: true });
+    await writeFile(join(notesDir, "projects", "apollo.md"), "Apollo launches on 14 March.");
+    vi.stubEnv("SPEKTER_KNOWLEDGE_DIR", notesDir);
+    const model = replyingModel("14 March.");
+    stubOpenRouterModel(model);
+
+    const response = await POST(chatRequest(conversation));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      message: { role: "assistant", content: "14 March." },
+      model: "openai/gpt-test",
+      sources: [{ type: "knowledge_file", path: "projects/apollo.md" }],
+    });
+    expect(model.doGenerateCalls[0].prompt[0]).toMatchObject({ role: "system" });
+    expect(model.doGenerateCalls[0].prompt[0].content).toContain(
+      '<note path="projects/apollo.md">\nApollo launches on 14 March.\n</note>',
+    );
+  });
+
+  it("sends the edited note on the next request without a restart", async () => {
+    const notesDir = join(promptDir, "notes");
+    await mkdir(notesDir);
+    await writeFile(join(notesDir, "apollo.md"), "Apollo launches on 14 March.");
+    vi.stubEnv("SPEKTER_KNOWLEDGE_DIR", notesDir);
+    const model = replyingModel("ok");
+    stubOpenRouterModel(model);
+
+    await POST(chatRequest(conversation));
+    await writeFile(join(notesDir, "apollo.md"), "Apollo launches on 21 March.");
+    await POST(chatRequest(conversation));
+
+    expect(model.doGenerateCalls[1].prompt[0].content).toContain("Apollo launches on 21 March.");
+    expect(model.doGenerateCalls[1].prompt[0].content).not.toContain("14 March");
+  });
+
+  it("returns 503 not_configured naming the folder without calling the model when the knowledge folder is missing", async () => {
+    const missing = join(promptDir, "no-notes");
+    vi.stubEnv("SPEKTER_KNOWLEDGE_DIR", missing);
+
+    const response = await POST(chatRequest(conversation));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error.code).toBe("not_configured");
+    expect(body.error.message).toContain(missing);
+    expect(createOpenRouterModel).not.toHaveBeenCalled();
   });
 
   it("returns 400 invalid_request without calling the model for an empty conversation", async () => {

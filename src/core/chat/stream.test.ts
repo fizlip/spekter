@@ -29,7 +29,28 @@ describe("streamChat", () => {
     expect(await collect(streamChat(conversation, model))).toEqual([
       { type: "delta", text: "Your name " },
       { type: "delta", text: "is Filip." },
-      { type: "done", model: "openai/gpt-test" },
+      { type: "done", model: "openai/gpt-test", sources: [] },
+    ]);
+  });
+
+  it("sends the knowledge notes as their own system message and lists them on done", async () => {
+    const model = streamingModel([...textParts(["ok"]), finishPart()], "m");
+    const notes = [{ path: "projects/apollo.md", content: "Apollo launches on 14 March." }];
+
+    const frames = await collect(streamChat(conversation, model, { systemPrompt: "# Be terse.\n", knowledge: notes }));
+
+    expect(model.doStreamCalls[0].prompt.slice(0, 3)).toEqual([
+      { role: "system", content: "# Be terse.\n" },
+      {
+        role: "system",
+        content:
+          'Knowledge notes. Each note starts with its path in the notes folder.\n\n<note path="projects/apollo.md">\nApollo launches on 14 March.\n</note>',
+      },
+      { role: "user", content: [{ type: "text", text: "My name is Filip." }] },
+    ]);
+    expect(frames).toEqual([
+      { type: "delta", text: "ok" },
+      { type: "done", model: "m", sources: [{ type: "knowledge_file", path: "projects/apollo.md" }] },
     ]);
   });
 
@@ -48,7 +69,7 @@ describe("streamChat", () => {
 
   it("prepends the system prompt verbatim before the caller's messages", async () => {
     const model = streamingModel([...textParts(["ok"]), finishPart()]);
-    await collect(streamChat(conversation, model, "# Be terse.\n"));
+    await collect(streamChat(conversation, model, { systemPrompt: "# Be terse.\n" }));
 
     const [call] = model.doStreamCalls;
     expect(call.prompt).toEqual([
@@ -64,7 +85,7 @@ describe("streamChat", () => {
 
     expect(await collect(streamChat(conversation, model))).toEqual([
       { type: "delta", text: "A long answ" },
-      { type: "done", model: "m" },
+      { type: "done", model: "m", sources: [] },
     ]);
   });
 
@@ -78,6 +99,20 @@ describe("streamChat", () => {
     expect(await collect(streamChat(conversation, model))).toEqual([
       { type: "delta", text: "Your name " },
       { type: "error", code: "provider_error", message: "upstream exploded" },
+    ]);
+  });
+
+  it("ends with one error frame explaining a context overflow", async () => {
+    const raw = "This endpoint's maximum context length is 200000 tokens.";
+    const model = streamingModel([{ type: "error", error: new Error(raw) }]);
+    const notes = [{ path: "big.md", content: "x".repeat(2048) }];
+
+    expect(await collect(streamChat(conversation, model, { knowledge: notes }))).toEqual([
+      {
+        type: "error",
+        code: "provider_error",
+        message: `The conversation and 1 knowledge note (2.0 KB, from SPEKTER_KNOWLEDGE_DIR) exceed the model's context limit. Provider said: ${raw}`,
+      },
     ]);
   });
 
@@ -118,7 +153,7 @@ describe("streamChat", () => {
     const model = hangingModel(textParts(["Your name "]).slice(0, 2));
     const frames: ChatStreamFrame[] = [];
 
-    for await (const frame of streamChat(conversation, model, null, controller.signal)) {
+    for await (const frame of streamChat(conversation, model, {}, controller.signal)) {
       frames.push(frame);
       controller.abort();
     }
