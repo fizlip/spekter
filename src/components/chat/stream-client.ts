@@ -13,9 +13,13 @@ export type StreamHandlers = {
 
 // Only completed exchanges go back to the model: a failed reply and the user
 // message it answered are left out, so the conversation still reads naturally.
+// Reasoning messages are display-only and never sent back.
 export function toConversation(messages: ChatMessage[]): CoreChatMessage[] {
   return messages
-    .filter((message, index) => !message.status && messages[index + 1]?.status !== "error")
+    .filter(
+      (message, index): message is ChatMessage & { role: "user" | "assistant" } =>
+        message.role !== "reasoning" && !message.status && messages[index + 1]?.status !== "error",
+    )
     .map(({ role, content }) => ({ role, content }));
 }
 

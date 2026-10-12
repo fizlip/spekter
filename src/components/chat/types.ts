@@ -1,10 +1,9 @@
 export type ChatMessage = {
   id: string;
-  role: "assistant" | "user";
+  role: "assistant" | "reasoning" | "user";
   content: string;
   createdAt: string;
-  // Set only on an assistant reply that is still arriving or that failed.
+  // Set only on a message that is still arriving or that failed.
   status?: "streaming" | "error";
   error?: string;
-  reasoning?: string;
 };

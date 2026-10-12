@@ -6,6 +6,7 @@ import {
   AssistantMessage,
   formatDayLabel,
   getDayKey,
+  ReasoningMessage,
   UserMessage,
 } from "./ChatMessageBubble";
 import { streamReply, toConversation } from "./stream-client";
@@ -47,11 +48,43 @@ export function ChatInterface({
     followBottomRef.current = true;
     const sentAt = new Date().toISOString();
     const userMessage: ChatMessage = { id: `user-${Date.now()}`, role: "user", content, createdAt: sentAt };
+    const reasoningId = `reasoning-${Date.now()}`;
     const replyId = `assistant-${Date.now()}`;
     const updateReply = (change: (reply: ChatMessage) => Partial<ChatMessage>) =>
       setMessages((current) =>
         current.map((message) => (message.id === replyId ? { ...message, ...change(message) } : message)),
       );
+
+    // Reasoning is its own message that appears above the reply on the first reasoning
+    // frame, then closes when reply text, an error, or done ends the thinking phase.
+    let reasoningFinished = false;
+    const finishReasoning = () => {
+      if (reasoningFinished) return;
+      reasoningFinished = true;
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === reasoningId ? { ...message, status: undefined } : message,
+        ),
+      );
+    };
+    const appendReasoning = (text: string) =>
+      setMessages((current) => {
+        if (current.some((message) => message.id === reasoningId)) {
+          return current.map((message) =>
+            message.id === reasoningId ? { ...message, content: message.content + text } : message,
+          );
+        }
+        const next = [...current];
+        const replyIndex = next.findIndex((message) => message.id === replyId);
+        next.splice(replyIndex === -1 ? next.length : replyIndex, 0, {
+          id: reasoningId,
+          role: "reasoning",
+          content: text,
+          createdAt: new Date().toISOString(),
+          status: "streaming",
+        });
+        return next;
+      });
 
     setMessages((current) => [
       ...current,
@@ -66,16 +99,27 @@ export function ChatInterface({
     await streamReply(
       toConversation([...messages, userMessage]),
       {
-        onDelta: (text) => updateReply((reply) => ({ content: reply.content + text })),
-        onReasoning: (text) => updateReply((reply) => ({ reasoning: (reply.reasoning ?? "") + text })),
-        onDone: () => updateReply(() => ({ status: undefined })),
-        onError: ({ message }) => updateReply(() => ({ status: "error", error: message })),
+        onDelta: (text) => {
+          finishReasoning();
+          updateReply((reply) => ({ content: reply.content + text }));
+        },
+        onReasoning: appendReasoning,
+        onDone: () => {
+          finishReasoning();
+          updateReply(() => ({ status: undefined }));
+        },
+        onError: ({ message }) => {
+          finishReasoning();
+          updateReply(() => ({ status: "error", error: message }));
+        },
       },
       controller.signal,
     );
     inFlightRef.current = null;
     setIsThinking(false);
   }
+
+  const lastAssistantIndex = messages.findLastIndex((m) => m.role === "assistant");
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-chat shadow rounded-md">
@@ -120,19 +164,19 @@ export function ChatInterface({
               const dayKey = getDayKey(message.createdAt);
               const startsDay = index === 0 || getDayKey(messages[index - 1].createdAt) !== dayKey;
 
+              // While reasoning streams, the pending reply stays hidden so only the
+              // trace shows; it appears with the first text delta, when reasoning ends.
+              if (message.role === "assistant" && message.status === "streaming" && !message.content &&
+                  messages.some((m) => m.role === "reasoning" && m.status === "streaming")) {
+                return null;
+              }
+
               return (
                 <div className="contents" key={message.id}>
-                  {startsDay && (
-                    <div className="flex items-center gap-4 py-2" role="separator">
-                      <span className="h-px flex-1 bg-slate-200/80" />
-                      <span className="text-[11px] font-medium tracking-wide text-slate-400">
-                        {formatDayLabel(dayKey, todayKey)}
-                      </span>
-                      <span className="h-px flex-1 bg-slate-200/80" />
-                    </div>
-                  )}
                   {message.role === "assistant" ? (
-                    <AssistantMessage message={message} />
+                    <AssistantMessage message={message} showAvatar={index === lastAssistantIndex} />
+                  ) : message.role === "reasoning" ? (
+                    <ReasoningMessage message={message} />
                   ) : (
                     <UserMessage message={message} />
                   )}
