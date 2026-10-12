@@ -130,6 +130,14 @@ describe("completeChat", () => {
     );
   });
 
+  it("keeps a tokens-per-minute rate limit as the provider's message, not a context overflow", async () => {
+    const raw = "Rate limit reached: too many tokens per minute";
+
+    await expect(completeChat(conversation, failingModel(raw), { knowledge: notes })).rejects.toThrow(
+      new ProviderError(raw),
+    );
+  });
+
   it("treats an empty reply as a provider error instead of a successful reply", async () => {
     const result = completeChat([{ role: "user", content: "Hi" }], replyingModel("   "));
     await expect(result).rejects.toBeInstanceOf(ProviderError);

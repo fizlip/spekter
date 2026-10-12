@@ -26,7 +26,7 @@ export async function readKnowledge(env: Env = process.env): Promise<KnowledgeNo
     .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".md"))
     .map((entry) => relative(folder, join(entry.parentPath, entry.name)).split(sep).join("/"))
     .filter((path) => !path.split("/").some((segment) => segment.startsWith(".")))
-    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    .sort();
 
   const notes = await Promise.all(
     paths.map(async (path) => {

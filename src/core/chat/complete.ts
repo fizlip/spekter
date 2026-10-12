@@ -60,7 +60,7 @@ export function incompleteReplyReason(text: string, finishReason: FinishReason):
   if (!text.trim()) return `Model returned no text (finish reason: ${finishReason})`;
 }
 
-const CONTEXT_OVERFLOW = /maximum context length|context length|context window|prompt is too long|too many tokens/i;
+const CONTEXT_OVERFLOW = /context length|context window|prompt is too long/i;
 
 // Rewrites a provider's context-overflow failure into a message saying what was too large;
 // any other failure keeps the provider's message as is.
