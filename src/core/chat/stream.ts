@@ -1,6 +1,6 @@
 import { streamText, type LanguageModel } from "ai";
 import type { SpekterError } from "../errors";
-import { assembleChatCall, incompleteReplyReason, knowledgeSources, toProviderError, type ChatContext } from "./complete";
+import { assembleChatCall, contextSources, incompleteReplyReason, toProviderError, type ChatContext } from "./complete";
 import type { ChatMessage } from "./contract";
 import type { ChatStreamFrame } from "./stream-frames";
 
@@ -16,7 +16,7 @@ export async function* streamChat(
 ): AsyncGenerator<ChatStreamFrame> {
   // External inputs are announced before the reply so interfaces can show what
   // went into it as it happens, not only after done.
-  const sources = knowledgeSources(context.knowledge);
+  const sources = contextSources(context);
   if (sources.length > 0) yield { type: "sources", sources };
 
   const result = streamText({

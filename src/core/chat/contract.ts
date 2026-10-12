@@ -19,7 +19,7 @@ export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
 
 // Something external that went into a reply; each kind of source gets its own `type`.
-export type Source = { type: "knowledge_file"; path: string };
+export type Source = { type: "command_file"; path: string } | { type: "knowledge_file"; path: string };
 
 export type ChatResponse = {
   message: { role: "assistant"; content: string };
