@@ -6,12 +6,12 @@ import { readConfig } from "@/core/config";
 import { trackRequest } from "@/core/instrumentation/request-log";
 import { readKnowledge } from "@/core/knowledge/markdown-folder";
 import { createOpenRouterModel } from "@/core/models/openrouter";
-import { errorResponse, readChatMessages } from "./http";
+import { errorResponse, readChatRequest } from "./http";
 
 export async function POST(request: Request) {
   const tracker = trackRequest("chat");
   try {
-    const messages = await readChatMessages(request);
+    const { messages, model: requestedModel } = await readChatRequest(request);
 
     // Slash commands are message-scoped: /tokens anywhere in the last user message
     // apply to this request and are stripped before the model sees it.
@@ -36,7 +36,8 @@ export async function POST(request: Request) {
       sources: resolved.sources,
       ...(resolved.effort ? { effort: resolved.effort } : {}),
     };
-    const effectiveConfig = resolved.model ? { ...config, model: resolved.model } : config;
+    const model = resolved.model ?? requestedModel;
+    const effectiveConfig = model ? { ...config, model } : config;
     const { text, sources } = await completeChat(
       resolved.messages,
       createOpenRouterModel(effectiveConfig),

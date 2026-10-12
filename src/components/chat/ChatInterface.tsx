@@ -26,6 +26,8 @@ export function ChatInterface({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+  const [models, setModels] = useState<{ id: string; name: string }[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const scrollRef = useRef<HTMLElement>(null);
   const followBottomRef = useRef(true);
   const inFlightRef = useRef<AbortController | null>(null);
@@ -41,6 +43,17 @@ export function ChatInterface({
   }, [messages, isThinking]);
 
   useEffect(() => () => inFlightRef.current?.abort(), []);
+
+  // The dropdown lists every model OpenRouter offers; a pick applies per request
+  // until changed, falling back to the configured model.
+  useEffect(() => {
+    fetch("/api/models")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => body && setModels(body.models ?? []))
+      .catch(() => {});
+  }, []);
+
+  const activeModel = selectedModel ?? model;
 
   async function sendMessage() {
     const content = draft.trim();
@@ -131,6 +144,7 @@ export function ChatInterface({
         },
       },
       controller.signal,
+      activeModel ?? undefined,
     );
     inFlightRef.current = null;
     setIsThinking(false);
@@ -171,7 +185,9 @@ export function ChatInterface({
                 onChange={setDraft}
                 onSend={sendMessage}
                 value={draft}
-                model={model}
+                model={activeModel}
+                models={models}
+                onSelectModel={setSelectedModel}
               />
             </div>
           </div>
@@ -213,7 +229,9 @@ export function ChatInterface({
               onChange={setDraft}
               onSend={sendMessage}
               value={draft}
-              model={model}
+              model={activeModel}
+              models={models}
+              onSelectModel={setSelectedModel}
             />
           </div>
         </footer>

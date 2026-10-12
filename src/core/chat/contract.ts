@@ -13,6 +13,8 @@ const chatRequestSchema = z.object({
     .refine((messages) => messages.at(-1)?.role === "user", {
       message: "Conversation must end with a user message",
     }),
+  // Per-request model pick from the composer; a slash-command override wins over it.
+  model: z.string().min(1).optional(),
 });
 
 export type ChatMessage = z.infer<typeof chatMessageSchema>;

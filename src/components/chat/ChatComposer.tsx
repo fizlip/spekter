@@ -12,6 +12,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Combobox } from "@base-ui/react/combobox";
 import { COMMANDS } from "@/core/chat/commands.meta";
 import { CommandPalette, type CommandItem } from "./CommandPalette";
 
@@ -22,11 +23,15 @@ export function ChatComposer({
   onChange,
   onSend,
   model,
+  models,
+  onSelectModel,
 }: {
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
   model: string | null;
+  models: { id: string; name: string }[];
+  onSelectModel: (model: string) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -141,16 +146,50 @@ export function ChatComposer({
               <DropdownMenuItem onClick={() => setSkill("Skill")}>Create skill</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <div className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-transparent p-1 text-sm text-slate-500 hover:bg-gray-100 hover:text-black">
-                  {model ?? "Model"}
-                </div>
-              }
-            />
-            <TooltipContent side="bottom">Model</TooltipContent>
-          </Tooltip>
+          <Combobox.Root
+            items={models}
+            value={models.find((entry) => entry.id === model) ?? null}
+            onValueChange={(value) => value && onSelectModel(value.id)}
+            itemToStringLabel={(item) => item.id}
+            isItemEqualToValue={(item, value) => item.id === value.id}
+          >
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Combobox.Trigger
+                    className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-transparent p-1 text-sm text-slate-500 outline-none hover:bg-gray-100 hover:text-black"
+                  />
+                }
+              >
+                {model ?? "Model"}
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Model</TooltipContent>
+            </Tooltip>
+            <Combobox.Portal>
+              <Combobox.Positioner side="top" align="start" sideOffset={4} className="z-50">
+                <Combobox.Popup className="w-72 rounded-lg bg-popover p-1 shadow-md ring-1 ring-foreground/10">
+                  <Combobox.Input
+                    placeholder="Search models"
+                    className="w-full rounded-md px-2 py-1.5 text-sm outline-none"
+                  />
+                  <Combobox.Empty className="px-2 py-1.5 text-sm text-slate-500">
+                    No models found
+                  </Combobox.Empty>
+                  <Combobox.List className="max-h-56 overflow-y-auto">
+                    {(item: { id: string; name: string }) => (
+                      <Combobox.Item
+                        key={item.id}
+                        value={item}
+                        className="cursor-pointer rounded-md px-2 py-1.5 text-sm data-[highlighted]:bg-gray-100"
+                      >
+                        {item.id}
+                      </Combobox.Item>
+                    )}
+                  </Combobox.List>
+                </Combobox.Popup>
+              </Combobox.Positioner>
+            </Combobox.Portal>
+          </Combobox.Root>
         </div>
         <div className="flex items-center gap-1">
           <button
