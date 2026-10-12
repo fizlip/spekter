@@ -34,7 +34,7 @@ export async function* streamChat(
           break;
         case "error":
           if (abortSignal?.aborted) return;
-          yield errorFrame(toProviderError(part.error));
+          yield errorFrame(toProviderError(part.error, context.knowledge));
           return;
         case "abort":
           return;
@@ -53,6 +53,6 @@ export async function* streamChat(
     }
   } catch (error) {
     if (abortSignal?.aborted) return;
-    yield errorFrame(toProviderError(error));
+    yield errorFrame(toProviderError(error, context.knowledge));
   }
 }

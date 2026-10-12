@@ -102,6 +102,20 @@ describe("streamChat", () => {
     ]);
   });
 
+  it("ends with one error frame explaining a context overflow", async () => {
+    const raw = "This endpoint's maximum context length is 200000 tokens.";
+    const model = streamingModel([{ type: "error", error: new Error(raw) }]);
+    const notes = [{ path: "big.md", content: "x".repeat(2048) }];
+
+    expect(await collect(streamChat(conversation, model, { knowledge: notes }))).toEqual([
+      {
+        type: "error",
+        code: "provider_error",
+        message: `The conversation and 1 knowledge note (2.0 KB, from SPEKTER_KNOWLEDGE_DIR) exceed the model's context limit. Provider said: ${raw}`,
+      },
+    ]);
+  });
+
   it("yields a single error frame when the model call fails before streaming", async () => {
     expect(await collect(streamChat(conversation, failingModel("Rate limit exceeded")))).toEqual([
       { type: "error", code: "provider_error", message: "Rate limit exceeded" },

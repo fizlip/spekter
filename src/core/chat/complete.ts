@@ -60,8 +60,19 @@ export function incompleteReplyReason(text: string, finishReason: FinishReason):
   if (!text.trim()) return `Model returned no text (finish reason: ${finishReason})`;
 }
 
-export function toProviderError(error: unknown): ProviderError {
-  return new ProviderError(error instanceof Error ? error.message : String(error));
+const CONTEXT_OVERFLOW = /maximum context length|context length|context window|prompt is too long|too many tokens/i;
+
+// Rewrites a provider's context-overflow failure into a message saying what was too large;
+// any other failure keeps the provider's message as is.
+export function toProviderError(error: unknown, knowledge: KnowledgeNote[] = []): ProviderError {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!CONTEXT_OVERFLOW.test(message)) return new ProviderError(message);
+
+  const bytes = knowledge.reduce((total, note) => total + Buffer.byteLength(note.content), 0);
+  const subject = knowledge.length
+    ? `The conversation and ${knowledge.length} knowledge ${knowledge.length === 1 ? "note" : "notes"} (${(bytes / 1024).toFixed(1)} KB, from SPEKTER_KNOWLEDGE_DIR) exceed`
+    : "The conversation exceeds";
+  return new ProviderError(`${subject} the model's context limit. Provider said: ${message}`);
 }
 
 export async function completeChat(
@@ -73,7 +84,7 @@ export async function completeChat(
   try {
     result = await generateText(assembleChatCall(messages, model, context));
   } catch (error) {
-    throw toProviderError(error);
+    throw toProviderError(error, context.knowledge);
   }
 
   const { text, finishReason } = result;

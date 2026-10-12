@@ -111,6 +111,25 @@ describe("completeChat", () => {
     await expect(result).rejects.toThrow("upstream exploded");
   });
 
+  it("explains a context overflow with the note count, size, and knowledge variable", async () => {
+    const raw =
+      "This endpoint's maximum context length is 200000 tokens. However, you requested about 250000 tokens";
+    const result = completeChat(conversation, failingModel(raw), { knowledge: notes });
+
+    await expect(result).rejects.toBeInstanceOf(ProviderError);
+    await expect(result).rejects.toThrow(
+      `The conversation and 2 knowledge notes (0.1 KB, from SPEKTER_KNOWLEDGE_DIR) exceed the model's context limit. Provider said: ${raw}`,
+    );
+  });
+
+  it("explains a context overflow without mentioning knowledge when no notes were sent", async () => {
+    const raw = "prompt is too long: 250000 tokens > 200000 maximum";
+
+    await expect(completeChat(conversation, failingModel(raw))).rejects.toThrow(
+      `The conversation exceeds the model's context limit. Provider said: ${raw}`,
+    );
+  });
+
   it("treats an empty reply as a provider error instead of a successful reply", async () => {
     const result = completeChat([{ role: "user", content: "Hi" }], replyingModel("   "));
     await expect(result).rejects.toBeInstanceOf(ProviderError);
