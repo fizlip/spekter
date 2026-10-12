@@ -3,6 +3,7 @@ import { serializeFrame, STREAM_CONTENT_TYPE } from "@/core/chat/stream-frames";
 import { readSystemPrompt } from "@/core/chat/system-prompt";
 import { readConfig } from "@/core/config";
 import { trackRequest, trackStream } from "@/core/instrumentation/request-log";
+import { readKnowledge } from "@/core/knowledge/markdown-folder";
 import { createOpenRouterModel } from "@/core/models/openrouter";
 import { errorResponse, readChatMessages } from "../http";
 
@@ -14,9 +15,10 @@ export async function POST(request: Request) {
     const messages = await readChatMessages(request);
     const config = readConfig();
     const systemPrompt = await readSystemPrompt();
+    const knowledge = await readKnowledge();
     const frames = trackStream(
       tracker,
-      streamChat(messages, createOpenRouterModel(config), { systemPrompt }, request.signal),
+      streamChat(messages, createOpenRouterModel(config), { systemPrompt, knowledge }, request.signal),
     );
     const encoder = new TextEncoder();
 

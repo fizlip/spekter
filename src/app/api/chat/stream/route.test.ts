@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LanguageModel } from "ai";
@@ -133,6 +133,39 @@ describe("POST /api/chat/stream", () => {
       role: "user",
       content: [{ type: "text", text: "My name is Filip." }],
     });
+  });
+
+  it("streams with the configured knowledge notes and lists them on done", async () => {
+    const notesDir = join(promptDir, "notes");
+    await mkdir(join(notesDir, "projects"), { recursive: true });
+    await writeFile(join(notesDir, "projects", "apollo.md"), "Apollo launches on 14 March.");
+    vi.stubEnv("SPEKTER_KNOWLEDGE_DIR", notesDir);
+    const model = streamingModel([...textParts(["14 March."]), finishPart()], "openai/gpt-test");
+    stubOpenRouterModel(model);
+
+    const response = await POST(streamRequest(conversation));
+
+    expect(await readFrames(response)).toEqual([
+      { type: "delta", text: "14 March." },
+      { type: "done", model: "openai/gpt-test", sources: [{ type: "knowledge_file", path: "projects/apollo.md" }] },
+    ]);
+    expect(model.doStreamCalls[0].prompt[0].content).toContain(
+      '<note path="projects/apollo.md">\nApollo launches on 14 March.\n</note>',
+    );
+  });
+
+  it("returns the 503 not_configured JSON error before the stream starts when the knowledge folder is missing", async () => {
+    const missing = join(promptDir, "no-notes");
+    vi.stubEnv("SPEKTER_KNOWLEDGE_DIR", missing);
+
+    const response = await POST(streamRequest(conversation));
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    const body = await response.json();
+    expect(body.error.code).toBe("not_configured");
+    expect(body.error.message).toContain(missing);
+    expect(createOpenRouterModel).not.toHaveBeenCalled();
   });
 
   it.each([
