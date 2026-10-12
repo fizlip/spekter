@@ -56,6 +56,7 @@ describe("POST /api/chat", () => {
     expect(await response.json()).toEqual({
       message: { role: "assistant", content: "Your name is Filip." },
       model: "openai/gpt-test",
+      sources: [],
     });
     expect(createOpenRouterModel).toHaveBeenCalledWith({
       apiKey: "sk-test",
@@ -89,6 +90,7 @@ describe("POST /api/chat", () => {
     expect(await response.json()).toEqual({
       message: { role: "assistant", content: "Word." },
       model: "openai/gpt-test",
+      sources: [],
     });
     expect(model.doGenerateCalls[0].prompt[0]).toEqual({
       role: "system",

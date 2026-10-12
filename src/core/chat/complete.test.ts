@@ -10,11 +10,59 @@ const conversation: ChatMessage[] = [
   { role: "user", content: "What is my name?" },
 ];
 
+const notes = [
+  { path: "people/filip.md", content: "Filip lives in Stockholm.\n" },
+  { path: "projects/apollo.md", content: "Apollo launches on 14 March." },
+];
+
+const knowledgeMessage = {
+  role: "system",
+  content: [
+    "Knowledge notes. Each note starts with its path in the notes folder.",
+    '<note path="people/filip.md">\nFilip lives in Stockholm.\n\n</note>',
+    '<note path="projects/apollo.md">\nApollo launches on 14 March.\n</note>',
+  ].join("\n\n"),
+};
+
 describe("completeChat", () => {
-  it("returns the model's reply text", async () => {
-    await expect(completeChat(conversation, replyingModel("Your name is Filip."))).resolves.toBe(
-      "Your name is Filip.",
-    );
+  it("returns the model's reply text with no sources when no knowledge is given", async () => {
+    await expect(completeChat(conversation, replyingModel("Your name is Filip."))).resolves.toEqual({
+      text: "Your name is Filip.",
+      sources: [],
+    });
+  });
+
+  it("sends the knowledge notes as their own system message after the system prompt", async () => {
+    const model = replyingModel("ok");
+    await completeChat(conversation, model, { systemPrompt: "# Be terse.\n", knowledge: notes });
+
+    const [call] = model.doGenerateCalls;
+    expect(call.prompt).toEqual([
+      { role: "system", content: "# Be terse.\n" },
+      knowledgeMessage,
+      { role: "user", content: [{ type: "text", text: "My name is Filip." }] },
+      { role: "assistant", content: [{ type: "text", text: "Nice to meet you, Filip." }] },
+      { role: "user", content: [{ type: "text", text: "What is my name?" }] },
+    ]);
+  });
+
+  it("sends the knowledge message first when there is no system prompt", async () => {
+    const model = replyingModel("ok");
+    await completeChat(conversation, model, { knowledge: notes });
+
+    const [call] = model.doGenerateCalls;
+    expect(call.prompt[0]).toEqual(knowledgeMessage);
+    expect(call.prompt[1]).toEqual({ role: "user", content: [{ type: "text", text: "My name is Filip." }] });
+  });
+
+  it("returns one knowledge_file source per note, in note order", async () => {
+    await expect(completeChat(conversation, replyingModel("ok"), { knowledge: notes })).resolves.toEqual({
+      text: "ok",
+      sources: [
+        { type: "knowledge_file", path: "people/filip.md" },
+        { type: "knowledge_file", path: "projects/apollo.md" },
+      ],
+    });
   });
 
   it("sends the caller's messages in order with no system prompt or tools", async () => {
@@ -32,7 +80,7 @@ describe("completeChat", () => {
 
   it("prepends the system prompt verbatim before the caller's messages", async () => {
     const model = replyingModel("ok");
-    await completeChat(conversation, model, "# Be terse.\n");
+    await completeChat(conversation, model, { systemPrompt: "# Be terse.\n" });
 
     const [call] = model.doGenerateCalls;
     expect(call.prompt).toEqual([
@@ -47,10 +95,13 @@ describe("completeChat", () => {
     const short = [{ role: "user", content: "Hi" }] satisfies ChatMessage[];
     const long = [{ role: "user", content: "Please think carefully about this question" }] satisfies ChatMessage[];
 
-    const withLongPrompt = assembleChatCall(short, replyingModel("ok"), "# A long system prompt full of words");
+    const withLongPrompt = assembleChatCall(short, replyingModel("ok"), {
+      systemPrompt: "# A long system prompt full of words",
+      knowledge: [{ path: "long.md", content: "Please think carefully about this long note full of words" }],
+    });
     expect(withLongPrompt.providerOptions.openrouter.reasoning.effort).toBe("none");
 
-    const withNoPrompt = assembleChatCall(long, replyingModel("ok"), null);
+    const withNoPrompt = assembleChatCall(long, replyingModel("ok"), { systemPrompt: null });
     expect(withNoPrompt.providerOptions.openrouter.reasoning.effort).toBe("medium");
   });
 

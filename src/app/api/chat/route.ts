@@ -12,12 +12,13 @@ export async function POST(request: Request) {
     const messages = await readChatMessages(request);
     const config = readConfig();
     const systemPrompt = await readSystemPrompt();
-    const content = await completeChat(messages, createOpenRouterModel(config), systemPrompt);
+    const { text, sources } = await completeChat(messages, createOpenRouterModel(config), { systemPrompt });
     void tracker.reply();
 
     return Response.json({
-      message: { role: "assistant", content },
+      message: { role: "assistant", content: text },
       model: config.model,
+      sources,
     } satisfies ChatResponse);
   } catch (error) {
     void tracker.fail(error);

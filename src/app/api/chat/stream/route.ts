@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     const systemPrompt = await readSystemPrompt();
     const frames = trackStream(
       tracker,
-      streamChat(messages, createOpenRouterModel(config), systemPrompt, request.signal),
+      streamChat(messages, createOpenRouterModel(config), { systemPrompt }, request.signal),
     );
     const encoder = new TextEncoder();
 

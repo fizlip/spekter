@@ -5,7 +5,7 @@ describe("serializeFrame", () => {
   it.each<ChatStreamFrame>([
     { type: "delta", text: "Hello\nworld" },
     { type: "error", code: "provider_error", message: "Rate limit exceeded" },
-    { type: "done", model: "anthropic/claude-haiku-4.5" },
+    { type: "done", model: "anthropic/claude-haiku-4.5", sources: [{ type: "knowledge_file", path: "notes/a.md" }] },
   ])("writes $type as one line of JSON that parses back to the same frame", (frame) => {
     const line = serializeFrame(frame);
 

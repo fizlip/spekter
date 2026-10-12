@@ -108,7 +108,7 @@ describe("trackStream", () => {
     const frames: ChatStreamFrame[] = [
       { type: "delta", text: "Hi " },
       { type: "delta", text: "Filip" },
-      { type: "done", model: "openai/gpt-test" },
+      { type: "done", model: "openai/gpt-test", sources: [] },
     ];
 
     expect(await drain(trackStream(trackRequest("chat_stream"), framesOf(frames)))).toEqual(frames);
@@ -128,7 +128,7 @@ describe("trackStream", () => {
   it("does not settle on reasoning frames", async () => {
     const frames: ChatStreamFrame[] = [
       { type: "reasoning", text: "thinking" },
-      { type: "done", model: "openai/gpt-test" },
+      { type: "done", model: "openai/gpt-test", sources: [] },
     ];
 
     await drain(trackStream(trackRequest("chat_stream"), framesOf(frames)));

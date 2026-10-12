@@ -72,7 +72,7 @@ describe("POST /api/chat/stream", () => {
     expect(await readFrames(response)).toEqual([
       { type: "delta", text: "Your name " },
       { type: "delta", text: "is Filip." },
-      { type: "done", model: "openai/gpt-test" },
+      { type: "done", model: "openai/gpt-test", sources: [] },
     ]);
     expect(createOpenRouterModel).toHaveBeenCalledWith({ apiKey: "sk-test", model: "openai/gpt-test" });
   });
@@ -101,7 +101,7 @@ describe("POST /api/chat/stream", () => {
     expect(await readFrames(response)).toEqual([
       { type: "delta", text: "Your name " },
       { type: "delta", text: "is Filip." },
-      { type: "done", model: "openai/gpt-test" },
+      { type: "done", model: "openai/gpt-test", sources: [] },
     ]);
     expect(model.doStreamCalls[0].prompt[0]).toEqual({
       role: "system",
