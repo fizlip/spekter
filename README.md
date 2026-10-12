@@ -18,6 +18,8 @@ The dev server listens on `http://127.0.0.1:3000` only, so nothing on your netwo
 
 The model's instructions come from one markdown file, pointed at by `SPEKTER_SYSTEM_PROMPT` and read fresh on every request, so editing the file takes effect on the next request with no restart. Both endpoints get the same instructions. Unset or an empty file sends no instructions, exactly as before; a configured file that cannot be read fails as `not_configured`, naming the file.
 
+Knowledge comes from a folder of markdown notes, pointed at by `SPEKTER_KNOWLEDGE_DIR`. Every `.md` file in it, subfolders included, is read fresh on every request and sent to the model as its own block after the instructions, each note labelled with its path inside the folder. Hidden files and folders, symlinks, and empty notes are skipped. All notes go to OpenRouter on every request, so they cost tokens each time and leave the machine. Unset or a folder with no notes sends no knowledge; a configured folder or note that cannot be read fails as `not_configured`, naming it. Notes too large for the model fail as `provider_error` with a message giving the note count and size.
+
 ```bash
 curl -s http://127.0.0.1:3000/api/chat \
   -H 'content-type: application/json' \
@@ -33,8 +35,14 @@ curl -s http://127.0.0.1:3000/api/chat \
 A successful reply:
 
 ```json
-{ "message": { "role": "assistant", "content": "Your name is Filip." }, "model": "anthropic/claude-haiku-4.5" }
+{
+  "message": { "role": "assistant", "content": "Your name is Filip." },
+  "model": "anthropic/claude-haiku-4.5",
+  "sources": [{ "type": "knowledge_file", "path": "people/filip.md" }]
+}
 ```
+
+`sources` lists the external sources that went into the reply, and is `[]` when there were none. Each entry has a `type`; today the only type is `knowledge_file`, whose `path` is relative to `SPEKTER_KNOWLEDGE_DIR`. Every note in the folder is sent with every request, so the list shows what the model was given, not what it relied on.
 
 Rules: send `Content-Type: application/json`, roles are `user` or `assistant`, content must not be empty or whitespace, and the last message must be from the user. Requests must be addressed to `127.0.0.1` or `localhost`.
 
@@ -44,8 +52,8 @@ Errors always have the shape `{ "error": { "code", "message" } }`:
 | --- | --- | --- |
 | 400 | `invalid_request` | Body is not JSON or the conversation breaks the rules above |
 | 403 | `forbidden` | The request was not addressed to `127.0.0.1` or `localhost` |
-| 503 | `not_configured` | `OPENROUTER_API_KEY` or `SPEKTER_MODEL` is missing, or the `SPEKTER_SYSTEM_PROMPT` file cannot be read |
-| 502 | `provider_error` | OpenRouter or the model failed, or the model returned an empty or cut-off reply; the message says why |
+| 503 | `not_configured` | `OPENROUTER_API_KEY` or `SPEKTER_MODEL` is missing, or the `SPEKTER_SYSTEM_PROMPT` file or `SPEKTER_KNOWLEDGE_DIR` folder cannot be read |
+| 502 | `provider_error` | OpenRouter or the model failed, the conversation and notes exceed the model's context limit, or the model returned an empty or cut-off reply; the message says why |
 | 500 | `internal_error` | Something unexpected went wrong on the server |
 
 ### Streaming
@@ -63,16 +71,16 @@ The response is `application/x-ndjson`: one JSON frame per line.
 ```text
 {"type":"delta","text":"1, 2, "}
 {"type":"delta","text":"3, 4, 5."}
-{"type":"done","model":"anthropic/claude-haiku-4.5"}
+{"type":"done","model":"anthropic/claude-haiku-4.5","sources":[]}
 ```
 
 | Frame | Meaning |
 | --- | --- |
 | `{ "type": "delta", "text" }` | The next piece of the reply; join them in order |
-| `{ "type": "done", "model" }` | The reply is complete |
+| `{ "type": "done", "model", "sources" }` | The reply is complete; `sources` is the same list `POST /api/chat` returns |
 | `{ "type": "error", "code", "message" }` | The reply failed; any text already received is not a complete reply |
 
-Every stream ends with exactly one `done` or `error` frame. Problems found before streaming starts (bad request, missing config) return the same JSON errors and statuses as `POST /api/chat`. A failure after streaming starts, such as the provider breaking off or returning an empty or cut-off reply, arrives as an `error` frame with code `provider_error`, because the 200 status has already been sent. Closing the connection cancels the model call.
+Every stream ends with exactly one `done` or `error` frame. Problems found before streaming starts (bad request, missing config) return the same JSON errors and statuses as `POST /api/chat`. A failure after streaming starts, such as the provider breaking off, rejecting a context that is too long, or returning an empty or cut-off reply, arrives as an `error` frame with code `provider_error`, because the 200 status has already been sent. Closing the connection cancels the model call.
 
 ### Request log
 
