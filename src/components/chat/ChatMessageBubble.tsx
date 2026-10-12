@@ -129,8 +129,8 @@ export function SourceMessage({ message }: { message: ChatMessage }) {
     >
       <div className="flex min-w-0 flex-1 flex-col gap-0.5 p-1">
         {message.sources?.map((source) => (
-          <p key={source.path} className="flex items-center gap-1.5 text-xs text-slate-500">
-            <FileText size={12} className="shrink-0" />
+          <p key={source.path} className="flex items-center gap-1.5 text-sm font-medium tracking-wide text-black">
+            <FileText size={14} className="shrink-0" />
             Read {source.path}
           </p>
         ))}
