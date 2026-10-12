@@ -51,7 +51,7 @@ async function LogEntries() {
 
 export default function LogsPage() {
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-6">
+    <div className="min-h-0 flex-1 overflow-y-auto p-6 bg-chat">
       <div className="mb-4 flex items-center gap-3">
         <Link
           href="/"
