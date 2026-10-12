@@ -45,7 +45,6 @@ export function ChatInterface({
   async function sendMessage() {
     const content = draft.trim();
     if (!content || isThinking) return;
-
     followBottomRef.current = true;
     const sentAt = new Date().toISOString();
     const userMessage: ChatMessage = { id: `user-${Date.now()}`, role: "user", content, createdAt: sentAt };

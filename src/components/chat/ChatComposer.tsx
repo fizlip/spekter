@@ -12,6 +12,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { COMMANDS } from "@/core/chat/commands.meta";
+import { CommandPalette, type CommandItem } from "./CommandPalette";
+
+const PALETTE_ITEMS: CommandItem[] = COMMANDS.map(({ name, description }) => ({ name, text: description }));
 
 export function ChatComposer({
   value,
@@ -27,6 +31,15 @@ export function ChatComposer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [skill, setSkill] = useState("")
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [paletteDismissed, setPaletteDismissed] = useState(false);
+
+  const paletteOpen = value.startsWith("/") && !/\s/.test(value.slice(1)) && !paletteDismissed;
+  const query = value.slice(1).toLowerCase();
+  const matches = PALETTE_ITEMS.filter(
+    (command) =>
+      command.name.toLowerCase().includes(query) || command.text.toLowerCase().includes(query),
+  );
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -34,16 +47,33 @@ export function ChatComposer({
 
     textarea.style.height = "auto";
     textarea.style.height = `${Math.min(textarea.scrollHeight, 144)}px`;
+
+    setActiveIndex(0);
+    if (!value.startsWith("/")) setPaletteDismissed(false);
   }, [value]);
+
+  // Completes the command token in place (trailing space closes the palette) instead
+  // of replacing the field, so text before or after the command is preserved.
+  const selectCommand = (item: CommandItem) => {
+    onChange(value.replace(/\/\S*$/, `/${item.name} `));
+  };
 
   return (
     <form
-      className="m-1 flex flex-col gap-1 rounded-[0.5rem] shadow bg-chat p-1 transition-shadow focus-within:border-slate-300"
+      className="relative m-1 flex flex-col gap-1 rounded-[0.5rem] shadow bg-chat p-1 transition-shadow focus-within:border-slate-300"
       onSubmit={(event) => {
         event.preventDefault();
         onSend();
       }}
     >
+      {paletteOpen && (
+        <CommandPalette
+          items={matches}
+          activeIndex={activeIndex}
+          onSelect={selectCommand}
+          onHover={setActiveIndex}
+        />
+      )}
       <label className="sr-only" htmlFor="chat-message">
         Message
       </label>
@@ -52,6 +82,29 @@ export function ChatComposer({
         id="chat-message"
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
+          if (paletteOpen) {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              setActiveIndex((index) => (matches.length ? (index + 1) % matches.length : 0));
+              return;
+            }
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              setActiveIndex((index) =>
+                matches.length ? (index - 1 + matches.length) % matches.length : 0,
+              );
+              return;
+            }
+            if (event.key === "Escape") {
+              setPaletteDismissed(true);
+              return;
+            }
+            if (event.key === "Enter" && !event.shiftKey && matches[activeIndex]) {
+              event.preventDefault();
+              selectCommand(matches[activeIndex]);
+              return;
+            }
+          }
           if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
             onSend();

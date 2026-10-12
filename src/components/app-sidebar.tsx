@@ -6,7 +6,9 @@ import {
   MousePointer2, 
   MessageCircle, 
   ClockFading, 
-  ShieldCheck 
+  ShieldCheck,
+  File,
+  Zap,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -41,6 +43,12 @@ export function AppSidebar() {
               className="font-inter hover:bg-[#e1e1e2] cursor-pointer text-sm hover:text-black text-gray-500"
             >
               <MessageCircle  size={12}/> Sessions
+            </SidebarMenuButton>
+            <SidebarMenuButton
+              render={<Link href="/files" />}
+              className="font-inter hover:bg-[#e1e1e2] cursor-pointer text-sm hover:text-black text-gray-500"
+            >
+              <File size={12}/> Files
             </SidebarMenuButton>
             <SidebarMenuButton
               render={<Link href="/logs" />}

@@ -10,6 +10,10 @@ const INCOMPLETE_FINISH_REASONS: ReadonlySet<FinishReason> = new Set(["content-f
 export type ChatContext = {
   systemPrompt?: string | null;
   knowledge?: KnowledgeNote[];
+  // Explicit reasoning effort, e.g. from a slash command; wins over the heuristic.
+  effort?: "medium" | "none";
+  // Other external inputs that went into the reply (system prompt, command files).
+  sources?: Source[];
 };
 
 function knowledgeMessage(notes: KnowledgeNote[]): SystemModelMessage {
@@ -24,12 +28,18 @@ export function knowledgeSources(notes: KnowledgeNote[] = []): Source[] {
   return notes.map(({ path }) => ({ type: "knowledge_file", path }));
 }
 
+// Everything external that went into the reply: knowledge notes plus any
+// extra sources the caller recorded (system prompt file, command files).
+export function contextSources({ knowledge = [], sources = [] }: ChatContext): Source[] {
+  return [...knowledgeSources(knowledge), ...sources];
+}
+
 // The one place both endpoints build the model call; system prompt, knowledge and tools attach here.
 // Knowledge is its own system message so the prompt file and the notes change independently.
 export function assembleChatCall(
   messages: ChatMessage[],
   model: LanguageModel,
-  { systemPrompt, knowledge = [] }: ChatContext = {},
+  { systemPrompt, knowledge = [], effort: effortOverride }: ChatContext = {},
 ): {
   model: LanguageModel;
   system?: string | SystemModelMessage[];
@@ -38,7 +48,7 @@ export function assembleChatCall(
     openrouter: { reasoning: { effort: "medium" | "none" } };
   };
 } {
-  const effort = needsReasoning(messages) ? ("medium" as const) : ("none" as const);
+  const effort = effortOverride ?? (needsReasoning(messages) ? ("medium" as const) : ("none" as const));
   const system = knowledge.length
     ? [
         ...(systemPrompt ? [{ role: "system" as const, content: systemPrompt }] : []),
@@ -62,10 +72,25 @@ export function incompleteReplyReason(text: string, finishReason: FinishReason):
 
 const CONTEXT_OVERFLOW = /context length|context window|prompt is too long/i;
 
+// Providers don't always fail with Error instances; plain-object payloads carry
+// their detail in .message or need JSON, not "[object Object]".
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
+    return error.message;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
 // Rewrites a provider's context-overflow failure into a message saying what was too large;
 // any other failure keeps the provider's message as is.
 export function toProviderError(error: unknown, knowledge: KnowledgeNote[] = []): ProviderError {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorMessage(error);
   if (!CONTEXT_OVERFLOW.test(message)) return new ProviderError(message);
 
   const bytes = knowledge.reduce((total, note) => total + Buffer.byteLength(note.content), 0);
@@ -90,5 +115,5 @@ export async function completeChat(
   const { text, finishReason } = result;
   const problem = incompleteReplyReason(text, finishReason);
   if (problem) throw new ProviderError(problem);
-  return { text, sources: knowledgeSources(context.knowledge) };
+  return { text, sources: contextSources(context) };
 }
