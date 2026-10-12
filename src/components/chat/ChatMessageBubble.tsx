@@ -5,7 +5,7 @@ import { code } from "@streamdown/code";
 import { Streamdown } from "streamdown";
 import type { ChatMessage } from "./types";
 import {useEffect, useRef, useState} from "react"
-import {Brain, ChevronDown, ThumbsUp, ThumbsDown} from "lucide-react"
+import {Brain, ChevronDown, FileText, ThumbsUp, ThumbsDown} from "lucide-react"
 import { mermaid } from "@streamdown/mermaid";
 
 function formatTime(createdAt: string) {
@@ -119,6 +119,24 @@ export function ReasoningMessage({ message }: { message: ChatMessage }) {
       </div>
     </article>
   )
+}
+
+export function SourceMessage({ message }: { message: ChatMessage }) {
+  return (
+    <article
+      aria-label={`Spekter sources at ${formatTime(message.createdAt)}`}
+      className="flex items-start gap-2 justify-start px-2"
+    >
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5 p-1">
+        {message.sources?.map((source) => (
+          <p key={source.path} className="flex items-center gap-1.5 text-xs text-slate-500">
+            <FileText size={12} className="shrink-0" />
+            Read {source.path}
+          </p>
+        ))}
+      </div>
+    </article>
+  );
 }
 
 export function AssistantMessage({ message, showAvatar = true }: { message: ChatMessage; showAvatar?: boolean }) {

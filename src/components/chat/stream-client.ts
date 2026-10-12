@@ -1,4 +1,4 @@
-import type { ChatMessage as CoreChatMessage } from "@/core/chat/contract";
+import type { ChatMessage as CoreChatMessage, Source } from "@/core/chat/contract";
 import type { ChatStreamFrame } from "@/core/chat/stream-frames";
 import type { ChatMessage } from "./types";
 
@@ -7,25 +7,30 @@ export type StreamError = { code: string; message: string };
 export type StreamHandlers = {
   onDelta: (text: string) => void;
   onReasoning: (text: string) => void;
+  onSources?: (sources: Source[]) => void;
   onDone: (model: string) => void;
   onError: (error: StreamError) => void;
 };
 
 // Only completed exchanges go back to the model: a failed reply and the user
 // message it answered are left out, so the conversation still reads naturally.
-// Reasoning messages are display-only and never sent back.
+// Reasoning and source messages are display-only and never sent back.
 export function toConversation(messages: ChatMessage[]): CoreChatMessage[] {
+  const isExchangeMessage = (message: ChatMessage) =>
+    message.role === "user" || message.role === "assistant";
   return messages
     .filter(
       (message, index): message is ChatMessage & { role: "user" | "assistant" } =>
-        message.role !== "reasoning" && !message.status && messages[index + 1]?.status !== "error",
+        isExchangeMessage(message) &&
+        !message.status &&
+        messages.slice(index + 1).find(isExchangeMessage)?.status !== "error",
     )
     .map(({ role, content }) => ({ role, content }));
 }
 
 export async function streamReply(
   messages: CoreChatMessage[],
-  { onDelta, onReasoning, onDone, onError }: StreamHandlers,
+  { onDelta, onReasoning, onSources, onDone, onError }: StreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
   const networkError = (error: unknown) => {
@@ -53,6 +58,7 @@ export async function streamReply(
     for await (const frame of readFrames(response.body)) {
       if (frame.type === "delta") onDelta(frame.text);
       else if (frame.type === "reasoning") onReasoning(frame.text);
+      else if (frame.type === "sources") onSources?.(frame.sources);
       else if (frame.type === "done") return onDone(frame.model);
       else return onError({ code: frame.code, message: frame.message });
     }

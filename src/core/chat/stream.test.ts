@@ -49,6 +49,7 @@ describe("streamChat", () => {
       { role: "user", content: [{ type: "text", text: "My name is Filip." }] },
     ]);
     expect(frames).toEqual([
+      { type: "sources", sources: [{ type: "knowledge_file", path: "projects/apollo.md" }] },
       { type: "delta", text: "ok" },
       { type: "done", model: "m", sources: [{ type: "knowledge_file", path: "projects/apollo.md" }] },
     ]);
@@ -108,6 +109,7 @@ describe("streamChat", () => {
     const notes = [{ path: "big.md", content: "x".repeat(2048) }];
 
     expect(await collect(streamChat(conversation, model, { knowledge: notes }))).toEqual([
+      { type: "sources", sources: [{ type: "knowledge_file", path: "big.md" }] },
       {
         type: "error",
         code: "provider_error",

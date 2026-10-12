@@ -146,6 +146,7 @@ describe("POST /api/chat/stream", () => {
     const response = await POST(streamRequest(conversation));
 
     expect(await readFrames(response)).toEqual([
+      { type: "sources", sources: [{ type: "knowledge_file", path: "projects/apollo.md" }] },
       { type: "delta", text: "14 March." },
       { type: "done", model: "openai/gpt-test", sources: [{ type: "knowledge_file", path: "projects/apollo.md" }] },
     ]);

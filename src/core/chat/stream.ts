@@ -14,6 +14,11 @@ export async function* streamChat(
   context: ChatContext = {},
   abortSignal?: AbortSignal,
 ): AsyncGenerator<ChatStreamFrame> {
+  // External inputs are announced before the reply so interfaces can show what
+  // went into it as it happens, not only after done.
+  const sources = knowledgeSources(context.knowledge);
+  if (sources.length > 0) yield { type: "sources", sources };
+
   const result = streamText({
     ...assembleChatCall(messages, model, context),
     abortSignal,
@@ -45,7 +50,7 @@ export async function* streamChat(
             : {
                 type: "done",
                 model: typeof model === "string" ? model : model.modelId,
-                sources: knowledgeSources(context.knowledge),
+                sources,
               };
           return;
         }

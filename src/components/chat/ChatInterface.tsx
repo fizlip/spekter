@@ -7,6 +7,7 @@ import {
   formatDayLabel,
   getDayKey,
   ReasoningMessage,
+  SourceMessage,
   UserMessage,
 } from "./ChatMessageBubble";
 import { streamReply, toConversation } from "./stream-client";
@@ -67,6 +68,14 @@ export function ChatInterface({
         ),
       );
     };
+    // Messages that belong to the pending reply — reasoning and sources — land
+    // between the user message and the reply placeholder.
+    const insertBeforeReply = (current: ChatMessage[], message: ChatMessage) => {
+      const next = [...current];
+      const replyIndex = next.findIndex((m) => m.id === replyId);
+      next.splice(replyIndex === -1 ? next.length : replyIndex, 0, message);
+      return next;
+    };
     const appendReasoning = (text: string) =>
       setMessages((current) => {
         if (current.some((message) => message.id === reasoningId)) {
@@ -74,16 +83,13 @@ export function ChatInterface({
             message.id === reasoningId ? { ...message, content: message.content + text } : message,
           );
         }
-        const next = [...current];
-        const replyIndex = next.findIndex((message) => message.id === replyId);
-        next.splice(replyIndex === -1 ? next.length : replyIndex, 0, {
+        return insertBeforeReply(current, {
           id: reasoningId,
           role: "reasoning",
           content: text,
           createdAt: new Date().toISOString(),
           status: "streaming",
         });
-        return next;
       });
 
     setMessages((current) => [
@@ -104,6 +110,18 @@ export function ChatInterface({
           updateReply((reply) => ({ content: reply.content + text }));
         },
         onReasoning: appendReasoning,
+        onSources: (sources) => {
+          if (sources.length === 0) return;
+          setMessages((current) =>
+            insertBeforeReply(current, {
+              id: `source-${Date.now()}`,
+              role: "source",
+              content: "",
+              createdAt: new Date().toISOString(),
+              sources,
+            }),
+          );
+        },
         onDone: () => {
           finishReasoning();
           updateReply(() => ({ status: undefined }));
@@ -177,6 +195,8 @@ export function ChatInterface({
                     <AssistantMessage message={message} showAvatar={index === lastAssistantIndex} />
                   ) : message.role === "reasoning" ? (
                     <ReasoningMessage message={message} />
+                  ) : message.role === "source" ? (
+                    <SourceMessage message={message} />
                   ) : (
                     <UserMessage message={message} />
                   )}

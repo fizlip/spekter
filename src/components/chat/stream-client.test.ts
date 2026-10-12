@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Source } from "@/core/chat/contract";
 import { streamReply, toConversation, type StreamError } from "./stream-client";
 import type { ChatMessage } from "./types";
 
@@ -26,6 +27,7 @@ async function run(signal?: AbortSignal) {
   const errors: StreamError[] = [];
   const done: string[] = [];
   const reasonings: string[] = [];
+  const sources: Source[][] = [];
   await streamReply(
     conversation,
     {
@@ -33,10 +35,11 @@ async function run(signal?: AbortSignal) {
       onError: (error) => errors.push(error),
       onDone: (model) => done.push(model),
       onReasoning: (reasoning) => reasonings.push(reasoning),
+      onSources: (list) => sources.push(list),
     },
     signal,
   );
-  return { deltas, errors, done, reasonings };
+  return { deltas, errors, done, reasonings, sources };
 }
 
 afterEach(() => {
@@ -70,6 +73,7 @@ describe("streamReply", () => {
       errors: [],
       done: ["openai/gpt-test"],
       reasonings: [],
+      sources: [],
     });
   });
 
@@ -88,6 +92,25 @@ describe("streamReply", () => {
       errors: [],
       done: ["m"],
       reasonings: ["The user said ", "their name."],
+      sources: [],
+    });
+  });
+
+  it("delivers the sources frame before the reply text", async () => {
+    stubFetch(
+      ndjsonResponse([
+        '{"type":"sources","sources":[{"type":"knowledge_file","path":"notes/a.md"}]}\n',
+        '{"type":"delta","text":"Hi"}\n',
+        '{"type":"done","model":"m","sources":[{"type":"knowledge_file","path":"notes/a.md"}]}\n',
+      ]),
+    );
+
+    expect(await run()).toEqual({
+      deltas: ["Hi"],
+      errors: [],
+      done: ["m"],
+      reasonings: [],
+      sources: [[{ type: "knowledge_file", path: "notes/a.md" }]],
     });
   });
 
@@ -96,7 +119,7 @@ describe("streamReply", () => {
       ndjsonResponse(['{"type":"delta","te', 'xt":"Hé"}\n{"type":"delta","text":"llo"}\n{"type":"do', 'ne","model":"m"}\n']),
     );
 
-    expect(await run()).toEqual({ deltas: ["Hé", "llo"], errors: [], done: ["m"], reasonings: [] });
+    expect(await run()).toEqual({ deltas: ["Hé", "llo"], errors: [], done: ["m"], reasonings: [], sources: [] });
   });
 
   it("reports a mid-stream error frame after the deltas already delivered, and never done", async () => {
@@ -112,6 +135,7 @@ describe("streamReply", () => {
       errors: [{ code: "provider_error", message: "upstream exploded" }],
       done: [],
       reasonings: [],
+      sources: [],
     });
   });
 
@@ -122,7 +146,7 @@ describe("streamReply", () => {
   ])("reports a %i JSON error response with its code and message", async (status, code, message) => {
     stubFetch(Response.json({ error: { code, message } }, { status }));
 
-    expect(await run()).toEqual({ deltas: [], errors: [{ code, message }], done: [], reasonings: [] });
+    expect(await run()).toEqual({ deltas: [], errors: [{ code, message }], done: [], reasonings: [], sources: [] });
   });
 
   it("reports a connection error when the stream ends without done or error", async () => {
@@ -159,6 +183,7 @@ describe("streamReply", () => {
       errors: [{ code: "network_error", message: "network connection lost" }],
       done: [],
       reasonings: [],
+      sources: [],
     });
   });
 
@@ -169,7 +194,7 @@ describe("streamReply", () => {
       throw new DOMException("The operation was aborted.", "AbortError");
     });
 
-    expect(await run(controller.signal)).toEqual({ deltas: [], errors: [], done: [], reasonings: [] });
+    expect(await run(controller.signal)).toEqual({ deltas: [], errors: [], done: [], reasonings: [], sources: [] });
   });
 });
 
@@ -198,6 +223,37 @@ describe("toConversation", () => {
         message("3", "user", "What is my name?"),
         message("4", "assistant", "Your na", { status: "error", error: "upstream exploded" }),
         message("5", "user", "Try again: what is my name?"),
+      ]),
+    ).toEqual([
+      { role: "user", content: "Hi" },
+      { role: "assistant", content: "Hello" },
+      { role: "user", content: "Try again: what is my name?" },
+    ]);
+  });
+
+  it("drops display-only messages that are not part of the exchange", () => {
+    expect(
+      toConversation([
+        message("1", "user", "Hi"),
+        message("2", "source", "Read notes/a.md"),
+        message("3", "reasoning", "Thinking about the question"),
+        message("4", "assistant", "Hello"),
+      ]),
+    ).toEqual([
+      { role: "user", content: "Hi" },
+      { role: "assistant", content: "Hello" },
+    ]);
+  });
+
+  it("drops the user message a failed reply answered even when display messages sit between them", () => {
+    expect(
+      toConversation([
+        message("1", "user", "Hi"),
+        message("2", "assistant", "Hello"),
+        message("3", "user", "What is my name?"),
+        message("4", "source", "Read notes/a.md"),
+        message("5", "assistant", "Your na", { status: "error", error: "upstream exploded" }),
+        message("6", "user", "Try again: what is my name?"),
       ]),
     ).toEqual([
       { role: "user", content: "Hi" },

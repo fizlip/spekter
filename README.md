@@ -77,6 +77,7 @@ The response is `application/x-ndjson`: one JSON frame per line.
 | Frame | Meaning |
 | --- | --- |
 | `{ "type": "delta", "text" }` | The next piece of the reply; join them in order |
+| `{ "type": "sources", "sources" }` | Sent first when external sources were read for this reply, so clients can show them before the text arrives |
 | `{ "type": "done", "model", "sources" }` | The reply is complete; `sources` is the same list `POST /api/chat` returns |
 | `{ "type": "error", "code", "message" }` | The reply failed; any text already received is not a complete reply |
 
