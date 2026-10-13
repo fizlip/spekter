@@ -44,12 +44,14 @@ export async function* streamChat(
           yield { type: "reasoning", text: event.text };
           break;
         case "tool_call":
-          yield event;
+          yield { type: "tool_call", id: event.id, name: event.name };
           break;
-        case "tool_result":
-          toolCalls.push(event);
-          yield event;
+        case "tool_result": {
+          const { id, name, ok } = event;
+          toolCalls.push({ id, name, ok });
+          yield { type: "tool_result", id, name, ok };
           break;
+        }
         case "error":
           if (abortSignal?.aborted) return;
           yield errorFrame(toProviderError(event.error, context.knowledge));
