@@ -2,10 +2,11 @@ import { completeChat } from "@/core/chat/complete";
 import { resolveCommands } from "@/core/chat/commands";
 import type { ChatResponse } from "@/core/chat/contract";
 import { readSystemPrompt } from "@/core/chat/system-prompt";
-import { readConfig } from "@/core/config";
+import { readConfig, readMaxSteps } from "@/core/config";
 import { trackRequest } from "@/core/instrumentation/request-log";
 import { readKnowledge } from "@/core/knowledge/markdown-folder";
 import { createOpenRouterModel } from "@/core/models/openrouter";
+import { builtinTools } from "@/core/tools/registry";
 import { errorResponse, readChatRequest } from "./http";
 
 export async function POST(request: Request) {
@@ -26,6 +27,7 @@ export async function POST(request: Request) {
     }
 
     const config = readConfig();
+    const maxSteps = readMaxSteps();
     const systemPrompt = await readSystemPrompt();
     const knowledge = await readKnowledge();
 
@@ -34,6 +36,8 @@ export async function POST(request: Request) {
       systemPrompt: prompt || null,
       knowledge,
       sources: resolved.sources,
+      tools: builtinTools,
+      maxSteps,
       ...(resolved.effort ? { effort: resolved.effort } : {}),
     };
     const model = resolved.model ?? requestedModel;

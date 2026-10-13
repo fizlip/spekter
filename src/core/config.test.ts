@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readConfig, readConfiguredModel } from "./config";
+import { readConfig, readConfiguredModel, readMaxSteps } from "./config";
 import { NotConfiguredError } from "./errors";
 
 describe("readConfig", () => {
@@ -30,6 +30,22 @@ describe("readConfig", () => {
   it("treats empty strings as missing", () => {
     expect(() => readConfig({ OPENROUTER_API_KEY: "", SPEKTER_MODEL: "  " })).toThrow(
       NotConfiguredError,
+    );
+  });
+});
+
+describe("readMaxSteps", () => {
+  it.each([["unset", {}], ["blank", { SPEKTER_MAX_STEPS: "  " }]])("defaults to 5 when %s", (_label, env) => {
+    expect(readMaxSteps(env)).toBe(5);
+  });
+
+  it("reads a positive whole number", () => {
+    expect(readMaxSteps({ SPEKTER_MAX_STEPS: " 3 " })).toBe(3);
+  });
+
+  it.each(["0", "-1", "2.5", "zero", "3abc"])("rejects %s, naming the variable", (value) => {
+    expect(() => readMaxSteps({ SPEKTER_MAX_STEPS: value })).toThrow(
+      new NotConfiguredError(`SPEKTER_MAX_STEPS must be a positive whole number, got "${value}"`),
     );
   });
 });
