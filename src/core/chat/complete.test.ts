@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ProviderError } from "../errors";
-import { failingModel, replyingModel } from "../testing/mock-model";
+import { failingModel, replyingModel, scriptedModel, toolCallContent } from "../testing/mock-model";
+import { currentTime } from "../tools/current-time";
 import { assembleChatCall, completeChat } from "./complete";
 import type { ChatMessage } from "./contract";
 
@@ -144,7 +145,7 @@ describe("completeChat", () => {
     await expect(result).rejects.toThrow("Model returned no text (finish reason: stop)");
   });
 
-  it.each(["content-filter", "error", "other"] as const)(
+  it.each(["content-filter", "error", "other", "tool-calls"] as const)(
     "treats a %s finish as a provider error even when some text came back",
     async (finishReason) => {
       const model = replyingModel("partial answ", finishReason);
@@ -162,5 +163,57 @@ describe("completeChat", () => {
     expect(model.doGenerateCalls[1].prompt).toEqual([
       { role: "user", content: [{ type: "text", text: "Second" }] },
     ]);
+  });
+});
+
+describe("completeChat with tools", () => {
+  const question: ChatMessage[] = [{ role: "user", content: "What is today's date?" }];
+
+  it("answers from the tool and lists it as a source after the knowledge notes", async () => {
+    const model = scriptedModel([
+      { content: [toolCallContent("current_time")], finishReason: "tool-calls" },
+      { content: [{ type: "text", text: "It is 12 October." }] },
+    ]);
+
+    await expect(completeChat(question, model, { knowledge: notes, tools: [currentTime], maxSteps: 5 })).resolves.toEqual({
+      text: "It is 12 October.",
+      sources: [
+        { type: "knowledge_file", path: "people/filip.md" },
+        { type: "knowledge_file", path: "projects/apollo.md" },
+        { type: "tool", name: "current_time" },
+      ],
+    });
+  });
+
+  it("lists a tool once however many times it was called", async () => {
+    const model = scriptedModel([
+      { content: [toolCallContent("current_time", "a"), toolCallContent("current_time", "b")], finishReason: "tool-calls" },
+      { content: [toolCallContent("current_time", "c")], finishReason: "tool-calls" },
+      { content: [{ type: "text", text: "Still 12 October." }] },
+    ]);
+
+    const { sources } = await completeChat(question, model, { tools: [currentTime], maxSteps: 5 });
+
+    expect(sources).toEqual([{ type: "tool", name: "current_time" }]);
+  });
+
+  it("leaves a failed tool out of the sources but still replies", async () => {
+    const model = scriptedModel([
+      { content: [toolCallContent("weather")], finishReason: "tool-calls" },
+      { content: [{ type: "text", text: "I can't check the weather." }] },
+    ]);
+
+    await expect(completeChat(question, model, { tools: [currentTime], maxSteps: 5 })).resolves.toEqual({
+      text: "I can't check the weather.",
+      sources: [],
+    });
+  });
+
+  it("fails clearly when the model still wants tools after the last step", async () => {
+    const model = scriptedModel([{ content: [toolCallContent("current_time")], finishReason: "tool-calls" }]);
+
+    await expect(completeChat(question, model, { tools: [currentTime], maxSteps: 2 })).rejects.toThrow(
+      new ProviderError("Model stopped without completing its reply (finish reason: tool-calls)"),
+    );
   });
 });

@@ -6,6 +6,8 @@ export type ChatStreamFrame =
   | { type: "reasoning"; text: string }
   | { type: "error"; code: ErrorCode; message: string }
   | { type: "sources"; sources: Source[] }
+  | { type: "tool_call"; id: string; name: string }
+  | { type: "tool_result"; id: string; name: string; ok: boolean }
   | { type: "done"; model: string; sources: Source[] };
 
 export const STREAM_CONTENT_TYPE = "application/x-ndjson";

@@ -5,7 +5,7 @@ import { code } from "@streamdown/code";
 import { Streamdown } from "streamdown";
 import type { ChatMessage } from "./types";
 import {useEffect, useRef, useState} from "react"
-import {Brain, ChevronDown, FileText, ThumbsUp, ThumbsDown} from "lucide-react"
+import {Brain, ChevronDown, FileText, ThumbsUp, ThumbsDown, Wrench} from "lucide-react"
 import { mermaid } from "@streamdown/mermaid";
 
 function formatTime(createdAt: string) {
@@ -128,12 +128,41 @@ export function SourceMessage({ message }: { message: ChatMessage }) {
       className="flex items-start gap-2 justify-start px-2"
     >
       <div className="flex min-w-0 flex-1 flex-col gap-0.5 p-1">
-        {message.sources?.map((source) => (
-          <p key={source.path} className="flex items-center gap-1.5 text-sm font-medium tracking-wide text-black">
-            <FileText size={14} className="shrink-0" />
-            Read {source.path}
-          </p>
-        ))}
+        {message.sources?.map((source) =>
+          "path" in source ? (
+            <p key={source.path} className="flex items-center gap-1.5 text-sm font-medium tracking-wide text-black">
+              <FileText size={14} className="shrink-0" />
+              Read {source.path}
+            </p>
+          ) : null,
+        )}
+      </div>
+    </article>
+  );
+}
+
+export function ToolMessage({ message }: { message: ChatMessage }) {
+  if (!message.tool) return null;
+  const { name, state } = message.tool;
+
+  return (
+    <article
+      aria-label={`Spekter tool call at ${formatTime(message.createdAt)}`}
+      className="flex items-start gap-2 justify-start px-2"
+    >
+      <div className="flex min-w-0 flex-1 flex-col p-1">
+        <p
+          className={`flex items-center gap-1.5 text-sm font-medium tracking-wide ${state === "failed" ? "text-red-700" : "text-black"}`}
+        >
+          <Wrench size={14} className="shrink-0" />
+          {state === "running" ? (
+            <span className="text-flare">Calling {name}</span>
+          ) : state === "succeeded" ? (
+            `Used ${name}`
+          ) : (
+            `${name} failed`
+          )}
+        </p>
       </div>
     </article>
   );

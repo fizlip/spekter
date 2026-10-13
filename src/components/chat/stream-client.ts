@@ -8,13 +8,15 @@ export type StreamHandlers = {
   onDelta: (text: string) => void;
   onReasoning: (text: string) => void;
   onSources?: (sources: Source[]) => void;
+  onToolCall?: (call: { id: string; name: string }) => void;
+  onToolResult?: (result: { id: string; name: string; ok: boolean }) => void;
   onDone: (model: string) => void;
   onError: (error: StreamError) => void;
 };
 
 // Only completed exchanges go back to the model: a failed reply and the user
 // message it answered are left out, so the conversation still reads naturally.
-// Reasoning and source messages are display-only and never sent back.
+// Reasoning, source, and tool messages are display-only and never sent back.
 export function toConversation(messages: ChatMessage[]): CoreChatMessage[] {
   const isExchangeMessage = (message: ChatMessage) =>
     message.role === "user" || message.role === "assistant";
@@ -30,7 +32,7 @@ export function toConversation(messages: ChatMessage[]): CoreChatMessage[] {
 
 export async function streamReply(
   messages: CoreChatMessage[],
-  { onDelta, onReasoning, onSources, onDone, onError }: StreamHandlers,
+  { onDelta, onReasoning, onSources, onToolCall, onToolResult, onDone, onError }: StreamHandlers,
   signal?: AbortSignal,
   model?: string,
 ): Promise<void> {
@@ -60,6 +62,8 @@ export async function streamReply(
       if (frame.type === "delta") onDelta(frame.text);
       else if (frame.type === "reasoning") onReasoning(frame.text);
       else if (frame.type === "sources") onSources?.(frame.sources);
+      else if (frame.type === "tool_call") onToolCall?.(frame);
+      else if (frame.type === "tool_result") onToolResult?.(frame);
       else if (frame.type === "done") return onDone(frame.model);
       else return onError({ code: frame.code, message: frame.message });
     }

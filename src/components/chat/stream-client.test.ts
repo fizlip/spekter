@@ -114,6 +114,34 @@ describe("streamReply", () => {
     });
   });
 
+  it("delivers tool call and tool result frames in order, without treating them as errors", async () => {
+    stubFetch(
+      ndjsonResponse([
+        '{"type":"tool_call","id":"call-1","name":"current_time"}\n',
+        '{"type":"tool_result","id":"call-1","name":"current_time","ok":true}\n',
+        '{"type":"delta","text":"It is Monday."}\n',
+        '{"type":"done","model":"m","sources":[{"type":"tool","name":"current_time"}]}\n',
+      ]),
+    );
+    const events: string[] = [];
+
+    await streamReply(conversation, {
+      onDelta: (text) => events.push(`delta ${text}`),
+      onReasoning: () => events.push("reasoning"),
+      onToolCall: ({ id, name }) => events.push(`call ${id} ${name}`),
+      onToolResult: ({ id, name, ok }) => events.push(`result ${id} ${name} ${ok}`),
+      onDone: (model) => events.push(`done ${model}`),
+      onError: ({ message }) => events.push(`error ${message}`),
+    });
+
+    expect(events).toEqual([
+      "call call-1 current_time",
+      "result call-1 current_time true",
+      "delta It is Monday.",
+      "done m",
+    ]);
+  });
+
   it("parses frames split across chunk boundaries the same as line-aligned ones", async () => {
     stubFetch(
       ndjsonResponse(['{"type":"delta","te', 'xt":"Hé"}\n{"type":"delta","text":"llo"}\n{"type":"do', 'ne","model":"m"}\n']),
@@ -237,7 +265,8 @@ describe("toConversation", () => {
         message("1", "user", "Hi"),
         message("2", "source", "Read notes/a.md"),
         message("3", "reasoning", "Thinking about the question"),
-        message("4", "assistant", "Hello"),
+        message("4", "tool", "", { tool: { id: "call-1", name: "current_time", state: "succeeded" } }),
+        message("5", "assistant", "Hello"),
       ]),
     ).toEqual([
       { role: "user", content: "Hi" },

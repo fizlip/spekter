@@ -3,9 +3,12 @@ import {
   failingModel,
   finishPart,
   hangingModel,
+  scriptedStreamingModel,
   streamingModel,
   textParts,
+  toolCallParts,
 } from "../testing/mock-model";
+import { currentTime } from "../tools/current-time";
 import type { ChatMessage } from "./contract";
 import { streamChat } from "./stream";
 import type { ChatStreamFrame } from "./stream-frames";
@@ -134,7 +137,7 @@ describe("streamChat", () => {
     });
   });
 
-  it.each(["content-filter", "error", "other"] as const)(
+  it.each(["content-filter", "error", "other", "tool-calls"] as const)(
     "treats a %s finish as an error even when text was streamed",
     async (finishReason) => {
       const model = streamingModel([...textParts(["partial answ"]), finishPart(finishReason)]);
@@ -162,5 +165,57 @@ describe("streamChat", () => {
 
     expect(frames).toEqual([{ type: "delta", text: "Your name " }]);
     expect(model.doStreamCalls[0].abortSignal?.aborted).toBe(true);
+  });
+});
+
+describe("streamChat with tools", () => {
+  const question: ChatMessage[] = [{ role: "user", content: "What is today's date?" }];
+
+  it("announces the tool call and its result, then streams the reply and lists the tool on done", async () => {
+    const notes = [{ path: "projects/apollo.md", content: "Apollo launches on 14 March." }];
+    const model = scriptedStreamingModel([
+      toolCallParts("current_time"),
+      [...textParts(["It is ", "12 October."]), finishPart()],
+    ]);
+
+    expect(await collect(streamChat(question, model, { knowledge: notes, tools: [currentTime], maxSteps: 5 }))).toEqual([
+      { type: "sources", sources: [{ type: "knowledge_file", path: "projects/apollo.md" }] },
+      { type: "tool_call", id: "call-current_time", name: "current_time" },
+      { type: "tool_result", id: "call-current_time", name: "current_time", ok: true },
+      { type: "delta", text: "It is " },
+      { type: "delta", text: "12 October." },
+      {
+        type: "done",
+        model: "mock-model-id",
+        sources: [
+          { type: "knowledge_file", path: "projects/apollo.md" },
+          { type: "tool", name: "current_time" },
+        ],
+      },
+    ]);
+  });
+
+  it("reports a failed tool and still finishes the reply without listing it", async () => {
+    const model = scriptedStreamingModel([
+      toolCallParts("weather"),
+      [...textParts(["I can't check the weather."]), finishPart()],
+    ]);
+
+    const frames = await collect(streamChat(question, model, { tools: [currentTime], maxSteps: 5 }));
+
+    expect(frames).toContainEqual({ type: "tool_result", id: "call-weather", name: "weather", ok: false });
+    expect(frames.at(-1)).toEqual({ type: "done", model: "mock-model-id", sources: [] });
+  });
+
+  it("ends with an error frame when the model still wants tools after the last step", async () => {
+    const model = scriptedStreamingModel([toolCallParts("current_time")]);
+
+    const frames = await collect(streamChat(question, model, { tools: [currentTime], maxSteps: 2 }));
+
+    expect(frames.at(-1)).toEqual({
+      type: "error",
+      code: "provider_error",
+      message: "Model stopped without completing its reply (finish reason: tool-calls)",
+    });
   });
 });

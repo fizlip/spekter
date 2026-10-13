@@ -8,6 +8,7 @@ import {
   getDayKey,
   ReasoningMessage,
   SourceMessage,
+  ToolMessage,
   UserMessage,
 } from "./ChatMessageBubble";
 import { streamReply, toConversation } from "./stream-client";
@@ -80,7 +81,7 @@ export function ChatInterface({
         ),
       );
     };
-    // Messages that belong to the pending reply — reasoning and sources — land
+    // Messages that belong to the pending reply — reasoning, sources, and tool calls — land
     // between the user message and the reply placeholder.
     const insertBeforeReply = (current: ChatMessage[], message: ChatMessage) => {
       const next = [...current];
@@ -134,6 +135,24 @@ export function ChatInterface({
             }),
           );
         },
+        onToolCall: ({ id, name }) => {
+          finishReasoning();
+          setMessages((current) =>
+            insertBeforeReply(current, {
+              id: `tool-${id}`,
+              role: "tool",
+              content: "",
+              createdAt: new Date().toISOString(),
+              tool: { id, name, state: "running" },
+            }),
+          );
+        },
+        onToolResult: ({ id, name, ok }) =>
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === `tool-${id}` ? { ...message, tool: { id, name, state: ok ? "succeeded" : "failed" } } : message,
+            ),
+          ),
         onDone: () => {
           finishReasoning();
           updateReply(() => ({ status: undefined }));
@@ -212,6 +231,8 @@ export function ChatInterface({
                     <ReasoningMessage message={message} />
                   ) : message.role === "source" ? (
                     <SourceMessage message={message} />
+                  ) : message.role === "tool" ? (
+                    <ToolMessage message={message} />
                   ) : (
                     <UserMessage message={message} />
                   )}
