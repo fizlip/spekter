@@ -1,4 +1,5 @@
-import { generateText, type FinishReason, type LanguageModel, type ModelMessage, type SystemModelMessage } from "ai";
+import { generateText, type FinishReason, type LanguageModel, type SystemModelMessage } from "ai";
+import type { ModelCall } from "../agent/loop";
 import { ProviderError } from "../errors";
 import type { KnowledgeNote } from "../knowledge/markdown-folder";
 import type { ChatMessage, Source } from "./contract";
@@ -40,14 +41,7 @@ export function assembleChatCall(
   messages: ChatMessage[],
   model: LanguageModel,
   { systemPrompt, knowledge = [], effort: effortOverride }: ChatContext = {},
-): {
-  model: LanguageModel;
-  system?: string | SystemModelMessage[];
-  messages: ModelMessage[];
-  providerOptions: {
-    openrouter: { reasoning: { effort: "medium" | "none" } };
-  };
-} {
+): ModelCall {
   const effort = effortOverride ?? (needsReasoning(messages) ? ("medium" as const) : ("none" as const));
   const system = knowledge.length
     ? [

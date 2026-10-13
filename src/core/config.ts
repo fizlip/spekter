@@ -7,6 +7,8 @@ export type Config = {
 
 export type Env = Record<string, string | undefined>;
 
+export const DEFAULT_MAX_STEPS = 5;
+
 export function readConfiguredModel(env: Env = process.env): string | null {
   return env.SPEKTER_MODEL?.trim() || null;
 }

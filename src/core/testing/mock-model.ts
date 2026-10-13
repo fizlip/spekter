@@ -55,6 +55,33 @@ export function streamingModel(parts: MockStreamPart[], modelId?: string) {
   });
 }
 
+type GenerateResult = Awaited<ReturnType<MockLanguageModelV3["doGenerate"]>>;
+
+export function toolCallContent(toolName: string, toolCallId = `call-${toolName}`, input = "{}") {
+  return { type: "tool-call" as const, toolCallId, toolName, input };
+}
+
+// Answers each model call with the next scripted response; the last one repeats,
+// so a loop that keeps calling the model keeps getting it.
+export function scriptedModel(responses: Array<Pick<GenerateResult, "content"> & { finishReason?: FinishReason }>) {
+  let call = 0;
+  return mockModel(async () => {
+    const { content, finishReason = "stop" } = responses[Math.min(call++, responses.length - 1)];
+    return { content, finishReason: { unified: finishReason, raw: finishReason }, usage, warnings: [] };
+  });
+}
+
+export function scriptedStreamingModel(calls: MockStreamPart[][]) {
+  let call = 0;
+  return new MockLanguageModelV3({
+    doStream: async () => ({ stream: simulateReadableStream({ chunks: calls[Math.min(call++, calls.length - 1)] }) }),
+  });
+}
+
+export function toolCallParts(toolName: string, toolCallId = `call-${toolName}`): MockStreamPart[] {
+  return [toolCallContent(toolName, toolCallId), finishPart("tool-calls")];
+}
+
 // Emits `parts`, then holds the stream open until the call's abort signal fires.
 export function hangingModel(parts: MockStreamPart[]) {
   return new MockLanguageModelV3({
