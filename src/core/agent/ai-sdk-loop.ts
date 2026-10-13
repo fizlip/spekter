@@ -1,4 +1,4 @@
-import { generateText, stepCountIs, streamText, tool, type ToolSet } from "ai";
+import { generateText, stepCountIs, streamText, tool, type ModelMessage, type ToolSet } from "ai";
 import { DEFAULT_MAX_STEPS } from "../config";
 import type { SpekterTool } from "../tools/types";
 import type { AgentLoop, LoopOptions, ToolOutcome } from "./loop";
@@ -12,6 +12,14 @@ function toToolSet(tools: SpekterTool[]): ToolSet {
   );
 }
 
+// Without it the model, unaware tools are off, narrates its next call instead of answering.
+// It goes last in that step's messages, after the tool results, so it is the latest thing read.
+const LAST_STEP_NOTICE: ModelMessage = {
+  role: "user",
+  content:
+    "(Spekter: you have used every tool call allowed for this reply, and tools are now off. Answer my request now with the information you already have, and say what you could not find out.)",
+};
+
 // No tools means exactly one plain model call, as before the loop existed.
 function loopSettings({ tools = [], maxSteps = DEFAULT_MAX_STEPS }: LoopOptions) {
   if (tools.length === 0) return {};
@@ -19,8 +27,8 @@ function loopSettings({ tools = [], maxSteps = DEFAULT_MAX_STEPS }: LoopOptions)
     tools: toToolSet(tools),
     stopWhen: stepCountIs(maxSteps),
     // The last allowed step can't call tools, so the model answers with what it gathered.
-    prepareStep: ({ stepNumber }: { stepNumber: number }) =>
-      stepNumber >= maxSteps - 1 ? { toolChoice: "none" as const } : {},
+    prepareStep: ({ stepNumber, messages }: { stepNumber: number; messages: ModelMessage[] }) =>
+      stepNumber >= maxSteps - 1 ? { toolChoice: "none" as const, messages: [...messages, LAST_STEP_NOTICE] } : {},
   };
 }
 

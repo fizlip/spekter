@@ -18,6 +18,9 @@ import type { LoopEvent } from "./loop";
 
 const question = [{ role: "user" as const, content: "What day is it?" }];
 
+const LAST_STEP_NOTICE =
+  "(Spekter: you have used every tool call allowed for this reply, and tools are now off. Answer my request now with the information you already have, and say what you could not find out.)";
+
 const brokenClock: SpekterTool = {
   name: "current_time",
   description: "Get the current time.",
@@ -61,6 +64,25 @@ describe("aiSdkLoop.complete", () => {
 
     expect(model.doGenerateCalls.map((call) => call.toolChoice)).toEqual([{ type: "auto" }, { type: "none" }]);
     expect(result.finishReason).toBe("tool-calls");
+  });
+
+  it("tells the model on the last step, after the tool results, that tools are off", async () => {
+    const model = scriptedModel([{ content: [toolCallContent("current_time")], finishReason: "tool-calls" }]);
+
+    await aiSdkLoop.complete(assembleChatCall(question, model), { tools: [currentTime], maxSteps: 2 });
+
+    const [first, last] = model.doGenerateCalls;
+    expect(JSON.stringify(first.prompt)).not.toContain(LAST_STEP_NOTICE);
+    expect(last.prompt.at(-2)).toMatchObject({ role: "tool" });
+    expect(last.prompt.at(-1)).toEqual({ role: "user", content: [{ type: "text", text: LAST_STEP_NOTICE }] });
+  });
+
+  it("adds the notice to the only step when the limit is one", async () => {
+    const model = replyingModel("Hi.");
+
+    await aiSdkLoop.complete(assembleChatCall(question, model), { tools: [currentTime], maxSteps: 1 });
+
+    expect(model.doGenerateCalls[0].prompt.at(-1)).toEqual({ role: "user", content: [{ type: "text", text: LAST_STEP_NOTICE }] });
   });
 
   it("runs a limit of one as a single tool-free step", async () => {
