@@ -22,6 +22,14 @@ Every Interface uses the same contract with the Core and gets no special treatme
 The single core function where the model call is assembled — messages, model, and provider options brought together for both chat endpoints.
 Instructions, knowledge, and tools attach there, so every Interface gets them without changing the caller contract.
 
+### Agent loop
+The Brick that runs a model call over as many steps as it needs: the model calls tools, gets their results back, and continues until it replies or reaches the step limit.
+Callers depend only on Spekter's own loop interface, so one loop (the AI SDK's today, a hand-rolled one or LangGraph later) can replace another without changing the endpoints or the tools.
+
+### Tool
+Something the model can call during a reply to get information or act, defined in Spekter's own shape and registered in one place so every Interface gets the same tools.
+A tool that returned a result for a reply is listed among that reply's sources.
+
 ### Source
-Something external that went into a reply, such as a knowledge note given to the model; every successful reply lists its sources.
+Something external that went into a reply, such as a knowledge note given to the model or a tool that returned a result; every successful reply lists its sources.
 Each source names its kind, so new knowledge Bricks and tools add new kinds rather than new response fields.
