@@ -17,7 +17,7 @@ function toToolSet(tools: SpekterTool[]): ToolSet {
 const LAST_STEP_NOTICE: ModelMessage = {
   role: "user",
   content:
-    "(Spekter: you have used every tool call allowed for this reply, and tools are now off. Answer my request now with the information you already have, and say what you could not find out.)",
+    "(Afryend: you have used every tool call allowed for this reply, and tools are now off. Answer my request now with the information you already have, and say what you could not find out.)",
 };
 
 // No tools means exactly one plain model call, as before the loop existed.
@@ -64,7 +64,7 @@ export const aiSdkLoop: AgentLoop = {
           yield { type: "reasoning", text: part.text };
           break;
         case "tool-call":
-          yield { type: "tool_call", id: part.toolCallId, name: part.toolName };
+          yield { type: "tool_call", id: part.toolCallId, name: part.toolName, input: part.input };
           break;
         case "tool-result":
         case "tool-error":

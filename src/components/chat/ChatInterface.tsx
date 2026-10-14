@@ -62,7 +62,10 @@ export function ChatInterface({
     followBottomRef.current = true;
     const sentAt = new Date().toISOString();
     const userMessage: ChatMessage = { id: `user-${Date.now()}`, role: "user", content, createdAt: sentAt };
-    const reasoningId = `reasoning-${Date.now()}`;
+    // Each reasoning segment between other events gets its own message, so the
+    // transcript reads reasoning > tool call > reasoning > tool call, in order.
+    let reasoningId = `reasoning-${Date.now()}`;
+    let reasoningCount = 0;
     const replyId = `assistant-${Date.now()}`;
     const updateReply = (change: (reply: ChatMessage) => Partial<ChatMessage>) =>
       setMessages((current) =>
@@ -81,6 +84,13 @@ export function ChatInterface({
         ),
       );
     };
+    // A reasoning frame after reasoning was closed starts a new segment, not a
+    // reopening of the old message: reasoning between tool calls stays in order.
+    const openReasoning = () => {
+      if (!reasoningFinished) return;
+      reasoningFinished = false;
+      reasoningId = `reasoning-${Date.now()}-${reasoningCount++}`;
+    };
     // Messages that belong to the pending reply — reasoning, sources, and tool calls — land
     // between the user message and the reply placeholder.
     const insertBeforeReply = (current: ChatMessage[], message: ChatMessage) => {
@@ -89,7 +99,8 @@ export function ChatInterface({
       next.splice(replyIndex === -1 ? next.length : replyIndex, 0, message);
       return next;
     };
-    const appendReasoning = (text: string) =>
+    const appendReasoning = (text: string) => {
+      openReasoning();
       setMessages((current) => {
         if (current.some((message) => message.id === reasoningId)) {
           return current.map((message) =>
@@ -104,6 +115,7 @@ export function ChatInterface({
           status: "streaming",
         });
       });
+    };
 
     setMessages((current) => [
       ...current,
@@ -135,22 +147,28 @@ export function ChatInterface({
             }),
           );
         },
-        onToolCall: ({ id, name }) => {
+        onToolCall: ({ id, name, input }) => {
           finishReasoning();
+          const path =
+            input && typeof input === "object" && "path" in input && typeof input.path === "string"
+              ? input.path
+              : undefined;
           setMessages((current) =>
             insertBeforeReply(current, {
               id: `tool-${id}`,
               role: "tool",
               content: "",
               createdAt: new Date().toISOString(),
-              tool: { id, name, state: "running" },
+              tool: { id, name, state: "running", ...(path ? { path } : {}) },
             }),
           );
         },
         onToolResult: ({ id, name, ok }) =>
           setMessages((current) =>
             current.map((message) =>
-              message.id === `tool-${id}` ? { ...message, tool: { id, name, state: ok ? "succeeded" : "failed" } } : message,
+              message.id === `tool-${id}`
+                ? { ...message, tool: { ...message.tool!, id, name, state: ok ? "succeeded" : "failed" } }
+                : message,
             ),
           ),
         onDone: () => {

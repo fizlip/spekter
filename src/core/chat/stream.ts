@@ -44,7 +44,7 @@ export async function* streamChat(
           yield { type: "reasoning", text: event.text };
           break;
         case "tool_call":
-          yield { type: "tool_call", id: event.id, name: event.name };
+          yield { type: "tool_call", id: event.id, name: event.name, input: event.input };
           break;
         case "tool_result": {
           const { id, name, ok } = event;

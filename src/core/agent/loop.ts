@@ -23,7 +23,7 @@ export type ToolOutcome = { id: string; name: string; ok: boolean };
 export type LoopEvent =
   | { type: "text"; text: string }
   | { type: "reasoning"; text: string }
-  | { type: "tool_call"; id: string; name: string }
+  | { type: "tool_call"; id: string; name: string; input: unknown }
   | ({ type: "tool_result" } & ToolOutcome)
   | { type: "error"; error: unknown }
   | { type: "abort" }

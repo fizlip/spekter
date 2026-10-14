@@ -19,7 +19,7 @@ import type { LoopEvent } from "./loop";
 const question = [{ role: "user" as const, content: "What day is it?" }];
 
 const LAST_STEP_NOTICE =
-  "(Spekter: you have used every tool call allowed for this reply, and tools are now off. Answer my request now with the information you already have, and say what you could not find out.)";
+  "(Afryend: you have used every tool call allowed for this reply, and tools are now off. Answer my request now with the information you already have, and say what you could not find out.)";
 
 const brokenClock: SpekterTool = {
   name: "current_time",
@@ -141,7 +141,7 @@ describe("aiSdkLoop.stream", () => {
     );
 
     expect(events).toEqual([
-      { type: "tool_call", id: "call-current_time", name: "current_time" },
+      { type: "tool_call", id: "call-current_time", name: "current_time", input: {} },
       { type: "tool_result", id: "call-current_time", name: "current_time", ok: true },
       { type: "text", text: "It is " },
       { type: "text", text: "Monday." },

@@ -141,9 +141,19 @@ export function SourceMessage({ message }: { message: ChatMessage }) {
   );
 }
 
+const TOOL_VERBS: Record<string, { doing: string; done: string }> = {
+  read_file: { doing: "Reading", done: "Read" },
+  list_files: { doing: "Listing", done: "Listed" },
+  write_file: { doing: "Writing", done: "Wrote" },
+  edit_file: { doing: "Editing", done: "Edited" },
+  delete_file: { doing: "Deleting", done: "Deleted" },
+};
+
 export function ToolMessage({ message }: { message: ChatMessage }) {
   if (!message.tool) return null;
-  const { name, state } = message.tool;
+  const { name, state, path } = message.tool;
+  const verbs = TOOL_VERBS[name];
+  const subject = path ?? name;
 
   return (
     <article
@@ -156,9 +166,11 @@ export function ToolMessage({ message }: { message: ChatMessage }) {
         >
           <Wrench size={14} className="shrink-0" />
           {state === "running" ? (
-            <span className="text-flare">Calling {name}</span>
+            <span className="text-flare">
+              {verbs ? `${verbs.doing} ${subject}` : `Calling ${name}`}
+            </span>
           ) : state === "succeeded" ? (
-            `Used ${name}`
+            verbs ? `${verbs.done} ${subject}` : `Used ${name}`
           ) : (
             `${name} failed`
           )}

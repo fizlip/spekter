@@ -180,7 +180,7 @@ describe("streamChat with tools", () => {
 
     expect(await collect(streamChat(question, model, { knowledge: notes, tools: [currentTime], maxSteps: 5 }))).toEqual([
       { type: "sources", sources: [{ type: "knowledge_file", path: "projects/apollo.md" }] },
-      { type: "tool_call", id: "call-current_time", name: "current_time" },
+      { type: "tool_call", id: "call-current_time", name: "current_time", input: {} },
       { type: "tool_result", id: "call-current_time", name: "current_time", ok: true },
       { type: "delta", text: "It is " },
       { type: "delta", text: "12 October." },
