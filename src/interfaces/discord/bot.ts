@@ -111,22 +111,23 @@ async function handleMessage(
   const botId = client.user?.id ?? "";
   const text = stripBotMention(message.content, botId).trim();
 
-  // Ack with an hourglass while working, then swap it for a check when the
-  // reply lands. Reactions are best-effort — a missing "Add Reactions"
-  // permission must never break the reply.
+  // Ack with an hourglass while working, then swap it for an outcome emoji —
+  // only when there's something worth marking: ⚠️ on error, 🤷 when the
+  // message wasn't readable, ✅ when the agent used tools or knowledge.
+  // Plain chat replies get no decoration. Reactions are best-effort — a
+  // missing "Add Reactions" permission must never break the reply.
   const ACK = "⏳";
-  const DONE = "✅";
   await message.react(ACK).catch(() => {});
-  const finish = async () => {
+  const finish = async (emoji?: string) => {
     await message.reactions.resolve(ACK)?.users.remove().catch(() => {});
-    await message.react(DONE).catch(() => {});
+    if (emoji) await message.react(emoji).catch(() => {});
   };
 
   // A message with no usable text (attachment-only, sticker, embed) gets an
   // honest "can't read it" reply instead of silently reaching the model.
   if (!text) {
     await thread.send(CANT_READ_MESSAGE);
-    await finish();
+    await finish("🤷");
     return;
   }
 
@@ -134,6 +135,7 @@ async function handleMessage(
   const typing = setInterval(() => void thread.sendTyping().catch(() => {}), TYPING_INTERVAL_MS);
   void thread.sendTyping().catch(() => {});
   let reply: string;
+  let emoji: string | undefined = "⚠️";
   try {
     const recent = await fetchRecentMessages(thread, config.historyLimit);
     // On a just-spawned thread the starter message may not appear in the
@@ -144,7 +146,11 @@ async function handleMessage(
         botUserId: botId,
         historyLimit: config.historyLimit,
       }) ?? [{ role: "user", content: text }];
-    reply = await askSpekter(config.apiUrl, history);
+    const result = await askSpekter(config.apiUrl, history);
+    reply = result.text;
+    // Only mark an answer when the agent did visible work — used a tool,
+    // command, or knowledge — not for plain conversation.
+    if (result.kind === "answer") emoji = result.sources.length ? "✅" : undefined;
   } catch (error) {
     console.error("Failed to answer a thread message", error);
     reply = BROKEN_MESSAGE;
@@ -155,7 +161,7 @@ async function handleMessage(
   for (const chunk of splitForDiscord(reply)) {
     await thread.send(chunk);
   }
-  await finish();
+  await finish(emoji);
 }
 
 // Discord returns at most 100 messages per fetch and newest first; page until

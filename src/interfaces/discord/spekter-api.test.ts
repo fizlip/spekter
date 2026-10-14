@@ -13,15 +13,23 @@ function jsonResponse(status: number, body: unknown) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("askSpekter", () => {
-  it("posts the conversation to /api/chat as JSON and returns the assistant text", async () => {
+  it("posts the conversation to /api/chat as JSON and returns the reply with its sources", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(200, { message: { role: "assistant", content: "hi there" }, model: "m", sources: [] }),
+      jsonResponse(200, {
+        message: { role: "assistant", content: "hi there" },
+        model: "m",
+        sources: [{ type: "tool", name: "read_file" }],
+      }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
     const reply = await askSpekter("http://127.0.0.1:3000", messages);
 
-    expect(reply).toBe("hi there");
+    expect(reply).toEqual({
+      text: "hi there",
+      kind: "answer",
+      sources: [{ type: "tool", name: "read_file" }],
+    });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("http://127.0.0.1:3000/api/chat");
     expect(init.method).toBe("POST");
@@ -39,20 +47,28 @@ describe("askSpekter", () => {
 
     const reply = await askSpekter("http://127.0.0.1:3000", messages);
 
-    expect(reply).toContain("not_configured");
-    expect(reply).toContain("OPENROUTER_API_KEY");
+    expect(reply.kind).toBe("error");
+    expect(reply.text).toContain("not_configured");
+    expect(reply.text).toContain("OPENROUTER_API_KEY");
   });
 
   it("reports the HTTP status when the error body is not the API's shape", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("nope", { status: 502 })));
 
-    expect(await askSpekter("http://127.0.0.1:3000", messages)).toContain("502");
+    const reply = await askSpekter("http://127.0.0.1:3000", messages);
+
+    expect(reply.kind).toBe("error");
+    expect(reply.text).toContain("502");
   });
 
   it("reports Spekter as unreachable when the request itself fails", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
 
-    expect(await askSpekter("http://127.0.0.1:3000", messages)).toBe(UNREACHABLE_MESSAGE);
+    expect(await askSpekter("http://127.0.0.1:3000", messages)).toEqual({
+      text: UNREACHABLE_MESSAGE,
+      kind: "error",
+      sources: [],
+    });
   });
 
   it("distinguishes a request timeout from an unreachable server", async () => {
@@ -61,6 +77,9 @@ describe("askSpekter", () => {
       vi.fn().mockRejectedValue(Object.assign(new Error("timed out"), { name: "TimeoutError" })),
     );
 
-    expect(await askSpekter("http://127.0.0.1:3000", messages)).toBe(TIMEOUT_MESSAGE);
+    const reply = await askSpekter("http://127.0.0.1:3000", messages);
+
+    expect(reply.kind).toBe("error");
+    expect(reply.text).toBe(TIMEOUT_MESSAGE);
   });
 });

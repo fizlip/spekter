@@ -39,3 +39,6 @@ Notes:
   gets one.
 - A reply over Discord's 2,000-character limit arrives as several messages.
 - If `next dev` isn't running the bot says it couldn't reach Spekter.
+- Reactions on your message: ⏳ while it works, then ✅ when the agent used
+  tools or knowledge, ⚠️ on errors, 🤷 when it couldn't read the message.
+  Plain chat replies get no reaction.
