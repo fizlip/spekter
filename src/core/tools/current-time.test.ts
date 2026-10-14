@@ -24,8 +24,15 @@ describe("current_time", () => {
 });
 
 describe("builtinTools", () => {
-  it("registers current_time and nothing else", () => {
-    expect(builtinTools.map((tool) => tool.name)).toEqual(["current_time"]);
-    expect(builtinTools[0].description).not.toBe("");
+  it("registers the built-in tools and nothing else", () => {
+    expect(builtinTools.map((tool) => tool.name)).toEqual([
+      "current_time",
+      "list_files",
+      "read_file",
+      "write_file",
+      "edit_file",
+      "delete_file",
+    ]);
+    expect(builtinTools.every((tool) => tool.description !== "")).toBe(true);
   });
 });

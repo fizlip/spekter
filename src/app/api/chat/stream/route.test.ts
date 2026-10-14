@@ -94,7 +94,14 @@ describe("POST /api/chat/stream", () => {
 
     await readFrames(await POST(streamRequest(conversation)));
 
-    expect(model.doStreamCalls[0].tools?.map((tool) => tool.name)).toEqual(["current_time"]);
+    expect(model.doStreamCalls[0].tools?.map((tool) => tool.name)).toEqual([
+      "current_time",
+      "list_files",
+      "read_file",
+      "write_file",
+      "edit_file",
+      "delete_file",
+    ]);
   });
 
   it("returns the 503 not_configured JSON error before the stream starts when SPEKTER_MAX_STEPS is invalid", async () => {

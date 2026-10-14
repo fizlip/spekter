@@ -83,7 +83,14 @@ describe("POST /api/chat", () => {
 
     await POST(chatRequest(conversation));
 
-    expect(model.doGenerateCalls[0].tools?.map((tool) => tool.name)).toEqual(["current_time"]);
+    expect(model.doGenerateCalls[0].tools?.map((tool) => tool.name)).toEqual([
+      "current_time",
+      "list_files",
+      "read_file",
+      "write_file",
+      "edit_file",
+      "delete_file",
+    ]);
   });
 
   it("returns 503 not_configured naming SPEKTER_MAX_STEPS without calling the model when it is invalid", async () => {
