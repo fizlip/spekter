@@ -49,7 +49,7 @@ describe("readDiscordConfig", () => {
     );
   });
 
-  it.each(["unset", {}], ["blank", { DISCORD_HISTORY_LIMIT: "  " }])(
+  it.each([["unset", {}], ["blank", { DISCORD_HISTORY_LIMIT: "  " }]])(
     "defaults the history limit to 50 when %s",
     (_label, env) => {
       expect(readDiscordConfig({ ...required, ...env }).historyLimit).toBe(50);

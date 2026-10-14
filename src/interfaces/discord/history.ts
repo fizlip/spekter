@@ -8,6 +8,11 @@ export type ThreadMessage = {
   author: { id: string; bot: boolean };
 };
 
+// Remove `<@id>` / `<@!id>` mention markup for the bot from message text.
+export function stripBotMention(content: string, botUserId: string): string {
+  return content.replace(new RegExp(`<@!?${botUserId}>`, "g"), "");
+}
+
 // Rebuild a thread's visible history into the Core's { role, content } shape.
 // Incoming messages arrive newest-first (Discord fetch order). Returns null
 // when nothing usable remains.
@@ -17,8 +22,6 @@ export function buildThreadHistory(
   allowedUserId: string,
   limit: number,
 ): ChatMessage[] | null {
-  const mentionPattern = new RegExp(`<@!?${botUserId}>`, "g");
-
   const mapped = [...messagesNewestFirst].reverse().flatMap((message): ChatMessage[] => {
     const role =
       message.author.id === botUserId
@@ -27,7 +30,7 @@ export function buildThreadHistory(
           ? "user"
           : null;
     if (!role) return [];
-    const content = message.content.replace(mentionPattern, "").trim();
+    const content = stripBotMention(message.content, botUserId).trim();
     return content ? [{ role, content }] : [];
   });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildThreadHistory, type ThreadMessage } from "./thread-history";
+import { buildThreadHistory, type ThreadMessage } from "./history";
 
 const BOT = "999";
 const ME = "111";
