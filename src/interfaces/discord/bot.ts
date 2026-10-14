@@ -111,10 +111,22 @@ async function handleMessage(
   const botId = client.user?.id ?? "";
   const text = stripBotMention(message.content, botId).trim();
 
+  // Ack with an hourglass while working, then swap it for a check when the
+  // reply lands. Reactions are best-effort — a missing "Add Reactions"
+  // permission must never break the reply.
+  const ACK = "⏳";
+  const DONE = "✅";
+  await message.react(ACK).catch(() => {});
+  const finish = async () => {
+    await message.reactions.resolve(ACK)?.users.remove().catch(() => {});
+    await message.react(DONE).catch(() => {});
+  };
+
   // A message with no usable text (attachment-only, sticker, embed) gets an
   // honest "can't read it" reply instead of silently reaching the model.
   if (!text) {
     await thread.send(CANT_READ_MESSAGE);
+    await finish();
     return;
   }
 
@@ -143,6 +155,7 @@ async function handleMessage(
   for (const chunk of splitForDiscord(reply)) {
     await thread.send(chunk);
   }
+  await finish();
 }
 
 // Discord returns at most 100 messages per fetch and newest first; page until

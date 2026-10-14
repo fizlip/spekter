@@ -13,7 +13,7 @@ One-time Discord setup:
    sees empty messages.
 3. Invite the bot: **OAuth2 > URL Generator**, scope `bot`, permissions
    *View Channels*, *Send Messages*, *Create Public Threads*, *Read Message
-   History*. Open the URL and pick your private server.
+   History*, *Add Reactions*. Open the URL and pick your private server.
 4. In Discord, right-click your own avatar/profile or open your profile and
    copy your **user id** (needs Developer Mode enabled in Discord settings).
    Put it in `.env.local` as `DISCORD_ALLOWED_USER_ID` — only that account gets
