@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { askSpekter, UNREACHABLE_MESSAGE } from "./spekter-api";
+import { askSpekter, TIMEOUT_MESSAGE, UNREACHABLE_MESSAGE } from "./spekter-api";
 
 const messages = [{ role: "user" as const, content: "hello" }];
 
@@ -53,5 +53,14 @@ describe("askSpekter", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
 
     expect(await askSpekter("http://127.0.0.1:3000", messages)).toBe(UNREACHABLE_MESSAGE);
+  });
+
+  it("distinguishes a request timeout from an unreachable server", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(Object.assign(new Error("timed out"), { name: "TimeoutError" })),
+    );
+
+    expect(await askSpekter("http://127.0.0.1:3000", messages)).toBe(TIMEOUT_MESSAGE);
   });
 });

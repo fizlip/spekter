@@ -3,14 +3,13 @@ import type { ChatMessage } from "@/core/chat/contract";
 // The slice of a Discord message the history builder needs; tests and the
 // dispatcher can both hand it real Message objects or plain fixtures.
 export type ThreadMessage = {
-  id: string;
   content: string;
   author: { id: string; bot: boolean };
 };
 
 // Remove `<@id>` / `<@!id>` mention markup for the bot from message text.
 export function stripBotMention(content: string, botUserId: string): string {
-  return content.replace(new RegExp(`<@!?${botUserId}>`, "g"), "");
+  return content.replaceAll(`<@${botUserId}>`, "").replaceAll(`<@!${botUserId}>`, "");
 }
 
 // Rebuild a thread's visible history into the Core's { role, content } shape.
@@ -18,19 +17,17 @@ export function stripBotMention(content: string, botUserId: string): string {
 // when nothing usable remains.
 export function buildThreadHistory(
   messagesNewestFirst: ThreadMessage[],
-  botUserId: string,
-  allowedUserId: string,
-  limit: number,
+  opts: { allowedUserId: string; botUserId: string; historyLimit: number },
 ): ChatMessage[] | null {
   const mapped = [...messagesNewestFirst].reverse().flatMap((message): ChatMessage[] => {
     const role =
-      message.author.id === botUserId
+      message.author.id === opts.botUserId
         ? "assistant"
-        : !message.author.bot && message.author.id === allowedUserId
+        : !message.author.bot && message.author.id === opts.allowedUserId
           ? "user"
           : null;
     if (!role) return [];
-    const content = stripBotMention(message.content, botUserId).trim();
+    const content = stripBotMention(message.content, opts.botUserId).trim();
     return content ? [{ role, content }] : [];
   });
 
@@ -44,7 +41,9 @@ export function buildThreadHistory(
     }
   }
 
-  const bounded = merged.slice(-limit);
+  // The request must end with a user message; an assistant tail would mean the
+  // bot already replied to the newest kept message.
+  const bounded = merged.slice(-opts.historyLimit);
   while (bounded.at(-1)?.role === "assistant") bounded.pop();
   return bounded.length ? bounded : null;
 }

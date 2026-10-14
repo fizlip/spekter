@@ -1,9 +1,11 @@
 import type { ChatMessage, ChatResponse } from "@/core/chat/contract";
 
 export const UNREACHABLE_MESSAGE = "Couldn't reach Spekter — is `npm run dev` running?";
+export const TIMEOUT_MESSAGE = "Spekter took too long to answer.";
+const REQUEST_TIMEOUT_MS = 300_000;
 
 // One POST to the local chat API; failures return the message the thread
-// should see, so the caller never has to distinguish reply from error (KTD7).
+// should see, so the caller never has to distinguish reply from error.
 export async function askSpekter(apiUrl: string, messages: ChatMessage[]): Promise<string> {
   let response: Response;
   try {
@@ -11,9 +13,12 @@ export async function askSpekter(apiUrl: string, messages: ChatMessage[]): Promi
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ messages }),
+      // The tool loop can run for minutes; a timeout still beats a queue wedged forever.
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-  } catch {
-    return UNREACHABLE_MESSAGE;
+  } catch (error) {
+    const name = error instanceof Error ? error.name : "";
+    return name === "TimeoutError" || name === "AbortError" ? TIMEOUT_MESSAGE : UNREACHABLE_MESSAGE;
   }
 
   if (!response.ok) {

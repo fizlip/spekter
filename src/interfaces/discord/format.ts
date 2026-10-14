@@ -1,7 +1,7 @@
 export const DISCORD_MESSAGE_LIMIT = 2000;
 
 // Split a reply into Discord-sized chunks, preferring paragraph, then line,
-// then word boundaries; an unbroken block is hard-split at the limit (KTD5).
+// then word boundaries; an unbroken block is hard-split at the limit.
 export function splitForDiscord(text: string, limit = DISCORD_MESSAGE_LIMIT): string[] {
   if (!text) return ["(empty reply)"];
 

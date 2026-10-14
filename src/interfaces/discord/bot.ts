@@ -1,4 +1,4 @@
-import type { Client, Message, ThreadChannel } from "discord.js";
+import { ThreadAutoArchiveDuration, type Client, type Message, type ThreadChannel } from "discord.js";
 import type { DiscordConfig } from "./config";
 import { splitForDiscord } from "./format";
 import { askSpekter } from "./spekter-api";
@@ -30,7 +30,7 @@ export function decideAction(args: {
 
 export function createMessageHandler(client: Client, config: DiscordConfig) {
   // One outstanding handling run per thread: rapid messages queue behind each
-  // other rather than interleaving API calls and replies (KTD4).
+  // other rather than interleaving API calls and replies.
   const queues = new Map<string, Promise<void>>();
 
   return (message: Message) => {
@@ -49,7 +49,12 @@ async function dispatch(
   const botId = client.user?.id ?? "";
   const channel = message.channel;
   const inThread = channel.isThread();
-  const isMember = inThread ? await isBotThreadMember(channel, botId) : false;
+  // The thread-membership lookup is a network call; only pay for it once the
+  // author gates that decideAction checks first have passed.
+  const isMember =
+    inThread && !message.author.bot && message.author.id === config.allowedUserId
+      ? await isBotThreadMember(channel, botId)
+      : false;
   const action = decideAction({
     isBot: message.author.bot,
     isAllowed: message.author.id === config.allowedUserId,
@@ -59,40 +64,42 @@ async function dispatch(
   });
 
   let thread: ThreadChannel | null = null;
-  if (action === "handle") thread = channel as ThreadChannel;
-  else if (action === "join") {
-    await (channel as ThreadChannel).join();
-    thread = channel as ThreadChannel;
+  if (action === "handle" && inThread) thread = channel;
+  else if (action === "join" && inThread) {
+    await channel.join();
+    thread = channel;
   } else if (action === "spawn") {
     thread = await message.startThread({
       name: threadName(message, botId),
-      autoArchiveDuration: 60,
+      autoArchiveDuration: ThreadAutoArchiveDuration.OneHour,
     });
   }
   if (!thread) return;
 
   const previous = queues.get(thread.id) ?? Promise.resolve();
-  const next = previous.then(
-    () => handleMessage(client, config, message, thread),
-    () => handleMessage(client, config, message, thread),
-  );
-  queues.set(
-    thread.id,
-    next.catch(() => {}),
-  );
+  // `previous` is always a stored .catch()-ed promise, so it never rejects.
+  const next = previous.then(() => handleMessage(client, config, message, thread));
+  const stored = next.catch((error) => {
+    console.error("Failed to handle a thread message", error);
+  });
+  queues.set(thread.id, stored);
+  // Drop the entry once it settles and nothing has queued behind it.
+  void stored.then(() => {
+    if (queues.get(thread.id) === stored) queues.delete(thread.id);
+  });
 }
 
 function isBotThreadMember(channel: ThreadChannel, botId: string): Promise<boolean> {
+  // No force option: the first fetch hits the API, later ones hit the cache.
   return channel.members
-    .fetchMe({ cache: false })
-    .then((member) => member?.user?.id === botId)
+    .fetchMe()
+    .then((member) => member.user?.id === botId)
     .catch(() => false);
 }
 
 function threadName(message: Message, botId: string): string {
   const text = stripBotMention(message.content, botId).trim();
-  const name = text ? text.slice(0, THREAD_NAME_MAX) : "chat";
-  return name;
+  return text ? text.slice(0, THREAD_NAME_MAX) : "chat";
 }
 
 async function handleMessage(
@@ -105,20 +112,26 @@ async function handleMessage(
   const text = stripBotMention(message.content, botId).trim();
 
   // A message with no usable text (attachment-only, sticker, embed) gets an
-  // honest "can't read it" reply instead of silently reaching the model (R10).
+  // honest "can't read it" reply instead of silently reaching the model.
   if (!text) {
     await thread.send(CANT_READ_MESSAGE);
     return;
   }
 
+  // Discord's typing indicator expires, so repeat it while the API call runs.
   const typing = setInterval(() => void thread.sendTyping().catch(() => {}), TYPING_INTERVAL_MS);
   void thread.sendTyping().catch(() => {});
   let reply: string;
   try {
     const recent = await fetchRecentMessages(thread, config.historyLimit);
-    const history = buildThreadHistory(recent, botId, config.allowedUserId, config.historyLimit);
+    const history = buildThreadHistory(recent, {
+      allowedUserId: config.allowedUserId,
+      botUserId: botId,
+      historyLimit: config.historyLimit,
+    });
     reply = history ? await askSpekter(config.apiUrl, history) : CANT_READ_MESSAGE;
-  } catch {
+  } catch (error) {
+    console.error("Failed to answer a thread message", error);
     reply = BROKEN_MESSAGE;
   } finally {
     clearInterval(typing);
@@ -135,20 +148,17 @@ async function fetchRecentMessages(thread: ThreadChannel, limit: number): Promis
   const collected: ThreadMessage[] = [];
   let before: string | undefined;
   while (collected.length < limit) {
-    const batch = await thread.messages.fetch({
-      limit: Math.min(100, limit - collected.length),
-      before,
-    });
+    const pageSize = Math.min(100, limit - collected.length);
+    const batch = await thread.messages.fetch({ limit: pageSize, before });
     if (!batch.size) break;
     for (const message of batch.values()) {
       collected.push({
-        id: message.id,
         content: message.content,
         author: { id: message.author.id, bot: message.author.bot },
       });
     }
     before = batch.last()?.id;
-    if (batch.size < Math.min(100, limit)) break;
+    if (batch.size < pageSize) break;
   }
   return collected;
 }
