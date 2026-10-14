@@ -124,12 +124,15 @@ async function handleMessage(
   let reply: string;
   try {
     const recent = await fetchRecentMessages(thread, config.historyLimit);
-    const history = buildThreadHistory(recent, {
-      allowedUserId: config.allowedUserId,
-      botUserId: botId,
-      historyLimit: config.historyLimit,
-    });
-    reply = history ? await askSpekter(config.apiUrl, history) : CANT_READ_MESSAGE;
+    // On a just-spawned thread the starter message may not appear in the
+    // fetch yet; the trigger's own text is still the conversation seed.
+    const history =
+      buildThreadHistory(recent, {
+        allowedUserId: config.allowedUserId,
+        botUserId: botId,
+        historyLimit: config.historyLimit,
+      }) ?? [{ role: "user", content: text }];
+    reply = await askSpekter(config.apiUrl, history);
   } catch (error) {
     console.error("Failed to answer a thread message", error);
     reply = BROKEN_MESSAGE;
