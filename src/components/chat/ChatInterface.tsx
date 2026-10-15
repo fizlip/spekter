@@ -8,6 +8,7 @@ import {
   getDayKey,
   ReasoningMessage,
   SourceMessage,
+  ToolMessage,
   UserMessage,
 } from "./ChatMessageBubble";
 import { streamReply, toConversation } from "./stream-client";
@@ -26,6 +27,8 @@ export function ChatInterface({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+  const [models, setModels] = useState<{ id: string; name: string }[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const scrollRef = useRef<HTMLElement>(null);
   const followBottomRef = useRef(true);
   const inFlightRef = useRef<AbortController | null>(null);
@@ -42,13 +45,27 @@ export function ChatInterface({
 
   useEffect(() => () => inFlightRef.current?.abort(), []);
 
+  // The dropdown lists every model OpenRouter offers; a pick applies per request
+  // until changed, falling back to the configured model.
+  useEffect(() => {
+    fetch("/api/models")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => body && setModels(body.models ?? []))
+      .catch(() => {});
+  }, []);
+
+  const activeModel = selectedModel ?? model;
+
   async function sendMessage() {
     const content = draft.trim();
     if (!content || isThinking) return;
     followBottomRef.current = true;
     const sentAt = new Date().toISOString();
     const userMessage: ChatMessage = { id: `user-${Date.now()}`, role: "user", content, createdAt: sentAt };
-    const reasoningId = `reasoning-${Date.now()}`;
+    // Each reasoning segment between other events gets its own message, so the
+    // transcript reads reasoning > tool call > reasoning > tool call, in order.
+    let reasoningId = `reasoning-${Date.now()}`;
+    let reasoningCount = 0;
     const replyId = `assistant-${Date.now()}`;
     const updateReply = (change: (reply: ChatMessage) => Partial<ChatMessage>) =>
       setMessages((current) =>
@@ -67,7 +84,14 @@ export function ChatInterface({
         ),
       );
     };
-    // Messages that belong to the pending reply — reasoning and sources — land
+    // A reasoning frame after reasoning was closed starts a new segment, not a
+    // reopening of the old message: reasoning between tool calls stays in order.
+    const openReasoning = () => {
+      if (!reasoningFinished) return;
+      reasoningFinished = false;
+      reasoningId = `reasoning-${Date.now()}-${reasoningCount++}`;
+    };
+    // Messages that belong to the pending reply — reasoning, sources, and tool calls — land
     // between the user message and the reply placeholder.
     const insertBeforeReply = (current: ChatMessage[], message: ChatMessage) => {
       const next = [...current];
@@ -75,7 +99,8 @@ export function ChatInterface({
       next.splice(replyIndex === -1 ? next.length : replyIndex, 0, message);
       return next;
     };
-    const appendReasoning = (text: string) =>
+    const appendReasoning = (text: string) => {
+      openReasoning();
       setMessages((current) => {
         if (current.some((message) => message.id === reasoningId)) {
           return current.map((message) =>
@@ -90,6 +115,7 @@ export function ChatInterface({
           status: "streaming",
         });
       });
+    };
 
     setMessages((current) => [
       ...current,
@@ -121,6 +147,30 @@ export function ChatInterface({
             }),
           );
         },
+        onToolCall: ({ id, name, input }) => {
+          finishReasoning();
+          const path =
+            input && typeof input === "object" && "path" in input && typeof input.path === "string"
+              ? input.path
+              : undefined;
+          setMessages((current) =>
+            insertBeforeReply(current, {
+              id: `tool-${id}`,
+              role: "tool",
+              content: "",
+              createdAt: new Date().toISOString(),
+              tool: { id, name, state: "running", ...(path ? { path } : {}) },
+            }),
+          );
+        },
+        onToolResult: ({ id, name, ok }) =>
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === `tool-${id}`
+                ? { ...message, tool: { ...message.tool!, id, name, state: ok ? "succeeded" : "failed" } }
+                : message,
+            ),
+          ),
         onDone: () => {
           finishReasoning();
           updateReply(() => ({ status: undefined }));
@@ -131,6 +181,7 @@ export function ChatInterface({
         },
       },
       controller.signal,
+      activeModel ?? undefined,
     );
     inFlightRef.current = null;
     setIsThinking(false);
@@ -171,7 +222,9 @@ export function ChatInterface({
                 onChange={setDraft}
                 onSend={sendMessage}
                 value={draft}
-                model={model}
+                model={activeModel}
+                models={models}
+                onSelectModel={setSelectedModel}
               />
             </div>
           </div>
@@ -196,6 +249,8 @@ export function ChatInterface({
                     <ReasoningMessage message={message} />
                   ) : message.role === "source" ? (
                     <SourceMessage message={message} />
+                  ) : message.role === "tool" ? (
+                    <ToolMessage message={message} />
                   ) : (
                     <UserMessage message={message} />
                   )}
@@ -213,7 +268,9 @@ export function ChatInterface({
               onChange={setDraft}
               onSend={sendMessage}
               value={draft}
-              model={model}
+              model={activeModel}
+              models={models}
+              onSelectModel={setSelectedModel}
             />
           </div>
         </footer>

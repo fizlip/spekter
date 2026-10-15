@@ -8,13 +8,15 @@ export type StreamHandlers = {
   onDelta: (text: string) => void;
   onReasoning: (text: string) => void;
   onSources?: (sources: Source[]) => void;
+  onToolCall?: (call: { id: string; name: string; input?: unknown }) => void;
+  onToolResult?: (result: { id: string; name: string; ok: boolean }) => void;
   onDone: (model: string) => void;
   onError: (error: StreamError) => void;
 };
 
 // Only completed exchanges go back to the model: a failed reply and the user
 // message it answered are left out, so the conversation still reads naturally.
-// Reasoning and source messages are display-only and never sent back.
+// Reasoning, source, and tool messages are display-only and never sent back.
 export function toConversation(messages: ChatMessage[]): CoreChatMessage[] {
   const isExchangeMessage = (message: ChatMessage) =>
     message.role === "user" || message.role === "assistant";
@@ -30,8 +32,9 @@ export function toConversation(messages: ChatMessage[]): CoreChatMessage[] {
 
 export async function streamReply(
   messages: CoreChatMessage[],
-  { onDelta, onReasoning, onSources, onDone, onError }: StreamHandlers,
+  { onDelta, onReasoning, onSources, onToolCall, onToolResult, onDone, onError }: StreamHandlers,
   signal?: AbortSignal,
+  model?: string,
 ): Promise<void> {
   const networkError = (error: unknown) => {
     if (!signal?.aborted) onError({ code: "network_error", message: errorMessage(error) });
@@ -42,7 +45,7 @@ export async function streamReply(
     response = await fetch("/api/chat/stream", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({ messages, ...(model ? { model } : {}) }),
       signal,
     });
   } catch (error) {
@@ -59,6 +62,8 @@ export async function streamReply(
       if (frame.type === "delta") onDelta(frame.text);
       else if (frame.type === "reasoning") onReasoning(frame.text);
       else if (frame.type === "sources") onSources?.(frame.sources);
+      else if (frame.type === "tool_call") onToolCall?.(frame);
+      else if (frame.type === "tool_result") onToolResult?.(frame);
       else if (frame.type === "done") return onDone(frame.model);
       else return onError({ code: frame.code, message: frame.message });
     }

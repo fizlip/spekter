@@ -2,11 +2,12 @@ import { commandReplyFrames, resolveCommands } from "@/core/chat/commands";
 import { streamChat } from "@/core/chat/stream";
 import { serializeFrame, STREAM_CONTENT_TYPE, type ChatStreamFrame } from "@/core/chat/stream-frames";
 import { readSystemPrompt } from "@/core/chat/system-prompt";
-import { readConfig } from "@/core/config";
+import { readConfig, readMaxSteps } from "@/core/config";
 import { trackRequest, trackStream } from "@/core/instrumentation/request-log";
 import { readKnowledge } from "@/core/knowledge/markdown-folder";
 import { createOpenRouterModel } from "@/core/models/openrouter";
-import { errorResponse, readChatMessages } from "../http";
+import { builtinTools } from "@/core/tools/registry";
+import { errorResponse, readChatRequest } from "../http";
 
 function streamResponse(frames: AsyncGenerator<ChatStreamFrame>): Response {
   const encoder = new TextEncoder();
@@ -32,7 +33,7 @@ function streamResponse(frames: AsyncGenerator<ChatStreamFrame>): Response {
 export async function POST(request: Request) {
   const tracker = trackRequest("chat_stream");
   try {
-    const messages = await readChatMessages(request);
+    const { messages, model: requestedModel } = await readChatRequest(request);
 
     // Slash commands are message-scoped: /tokens anywhere in the last user message
     // apply to this request and are stripped before the model sees it.
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
     }
 
     const config = readConfig();
+    const maxSteps = readMaxSteps();
     const systemPrompt = await readSystemPrompt();
     const knowledge = await readKnowledge();
 
@@ -50,9 +52,12 @@ export async function POST(request: Request) {
       systemPrompt: prompt || null,
       knowledge,
       sources: resolved.sources,
+      tools: builtinTools,
+      maxSteps,
       ...(resolved.effort ? { effort: resolved.effort } : {}),
     };
-    const effectiveConfig = resolved.model ? { ...config, model: resolved.model } : config;
+    const model = resolved.model ?? requestedModel;
+    const effectiveConfig = model ? { ...config, model } : config;
 
     return streamResponse(
       trackStream(

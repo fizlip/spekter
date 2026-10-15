@@ -43,3 +43,7 @@ next-env.d.ts
 
 # request log (SPE-3)
 /logs
+
+# agent-managed content — the file tools read/write here at runtime
+/knowledge/
+/skills/

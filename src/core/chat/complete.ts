@@ -1,12 +1,16 @@
-import { generateText, type FinishReason, type LanguageModel, type ModelMessage, type SystemModelMessage } from "ai";
+import type { FinishReason, LanguageModel, SystemModelMessage } from "ai";
+import { agentLoop } from "../agent";
+import type { LoopOptions, ModelCall, ToolOutcome } from "../agent/loop";
 import { ProviderError } from "../errors";
 import type { KnowledgeNote } from "../knowledge/markdown-folder";
+import type { SpekterTool } from "../tools/types";
 import type { ChatMessage, Source } from "./contract";
 import { needsReasoning } from "./reasoning";
 
-const INCOMPLETE_FINISH_REASONS: ReadonlySet<FinishReason> = new Set(["content-filter", "error", "other"]);
+// A final "tool-calls" finish means the model still wanted tools when the loop ended.
+const INCOMPLETE_FINISH_REASONS: ReadonlySet<FinishReason> = new Set(["content-filter", "error", "other", "tool-calls"]);
 
-// What the Core adds to the caller's conversation: instructions and knowledge.
+// What the Core adds to the caller's conversation: instructions, knowledge, and tools.
 export type ChatContext = {
   systemPrompt?: string | null;
   knowledge?: KnowledgeNote[];
@@ -14,7 +18,19 @@ export type ChatContext = {
   effort?: "medium" | "none";
   // Other external inputs that went into the reply (system prompt, command files).
   sources?: Source[];
+  tools?: SpekterTool[];
+  maxSteps?: number;
 };
+
+export function loopOptions({ tools, maxSteps }: ChatContext, abortSignal?: AbortSignal): LoopOptions {
+  return { tools, maxSteps, abortSignal };
+}
+
+// Each tool that returned a result, once, in the order it was first called.
+export function toolSources(outcomes: ToolOutcome[]): Source[] {
+  const names = new Set(outcomes.filter(({ ok }) => ok).map(({ name }) => name));
+  return [...names].map((name) => ({ type: "tool", name }));
+}
 
 function knowledgeMessage(notes: KnowledgeNote[]): SystemModelMessage {
   const blocks = notes.map(({ path, content }) => `<note path="${path}">\n${content}\n</note>`);
@@ -40,14 +56,7 @@ export function assembleChatCall(
   messages: ChatMessage[],
   model: LanguageModel,
   { systemPrompt, knowledge = [], effort: effortOverride }: ChatContext = {},
-): {
-  model: LanguageModel;
-  system?: string | SystemModelMessage[];
-  messages: ModelMessage[];
-  providerOptions: {
-    openrouter: { reasoning: { effort: "medium" | "none" } };
-  };
-} {
+): ModelCall {
   const effort = effortOverride ?? (needsReasoning(messages) ? ("medium" as const) : ("none" as const));
   const system = knowledge.length
     ? [
@@ -107,13 +116,13 @@ export async function completeChat(
 ): Promise<{ text: string; sources: Source[] }> {
   let result;
   try {
-    result = await generateText(assembleChatCall(messages, model, context));
+    result = await agentLoop.complete(assembleChatCall(messages, model, context), loopOptions(context));
   } catch (error) {
     throw toProviderError(error, context.knowledge);
   }
 
-  const { text, finishReason } = result;
+  const { text, finishReason, toolCalls } = result;
   const problem = incompleteReplyReason(text, finishReason);
   if (problem) throw new ProviderError(problem);
-  return { text, sources: contextSources(context) };
+  return { text, sources: [...contextSources(context), ...toolSources(toolCalls)] };
 }

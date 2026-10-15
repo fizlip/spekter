@@ -12,13 +12,27 @@ npm run dev
 
 The dev server listens on `http://127.0.0.1:3000` only, so nothing on your network can reach the API.
 
+The app itself has three pages: `/` is the chat — streaming replies, reasoning traces, tool-call status, slash-command autocomplete, and a model picker fed by `GET /api/models` — `/files` lists the knowledge notes, and `/logs` renders the request log.
+
 ## Core chat API
 
-`POST /api/chat` takes a conversation and returns the assistant's next reply as one complete message. It is stateless: send the full history every time. The model is set by `SPEKTER_MODEL` in `.env.local`.
+`POST /api/chat` takes a conversation and returns the assistant's next reply as one complete message. It is stateless: send the full history every time. The model comes from an optional `model` field on the request, falling back to `SPEKTER_MODEL` in `.env.local`. `GET /api/models` returns the models available to the configured key, sorted by id and cached for an hour — the web chat's model picker reads it.
 
 The model's instructions come from one markdown file, pointed at by `SPEKTER_SYSTEM_PROMPT` and read fresh on every request, so editing the file takes effect on the next request with no restart. Both endpoints get the same instructions. Unset or an empty file sends no instructions, exactly as before; a configured file that cannot be read fails as `not_configured`, naming the file.
 
 Knowledge comes from a folder of markdown notes, pointed at by `SPEKTER_KNOWLEDGE_DIR`. Every `.md` file in it, subfolders included, is read fresh on every request and sent to the model as its own block after the instructions, each note labelled with its path inside the folder. Hidden files and folders, symlinks, and empty notes are skipped. All notes go to OpenRouter on every request, so they cost tokens each time and leave the machine. Unset or a folder with no notes sends no knowledge; a configured folder or note that cannot be read fails as `not_configured`, naming it. Notes too large for the model fail as `provider_error` with a message giving the note count and size.
+
+The model can call tools, get their results back, and keep going before it replies. Tools are registered in `src/core/tools/registry.ts`, and both endpoints offer the same ones. Today there are six: `current_time` returns the server's current date, time, and timezone; `list_files`, `read_file`, `write_file`, `edit_file`, and `delete_file` touch files. The file tools only see the folders named by `SPEKTER_FILE_DIRS` (default `skills,knowledge`, relative to the server directory); absolute paths and `..` escapes are rejected, `write_file` creates parent folders, `edit_file` replaces a string that must match exactly once, and `delete_file` refuses directories. Each request runs at most `SPEKTER_MAX_STEPS` model steps (default 5). The last step always runs with tools turned off, and the model is told so, so it answers with what it has gathered rather than looping. A tool that fails sends its error back to the model, which can explain or work around it; the request itself does not fail. An invalid `SPEKTER_MAX_STEPS` fails as `not_configured`. The loop sits behind Spekter's own interface in `src/core/agent/`, so it can be swapped without touching the endpoints or the tools.
+
+`skills/` and `knowledge/` are gitignored — the model can create and edit their contents, so they hold runtime state rather than source, and a fresh clone starts with empty folders.
+
+Slash commands are message-scoped: a `/token` in the last user message applies to that request only, then is stripped before the model sees the text. A token counts only at the start of the message or after whitespace, so `docs/help/HELP.md` never parses; unregistered `/tokens` pass through untouched, and a message made only of command tokens reaches the model intact. The registry lives in `src/core/chat/commands.meta.ts` (client-safe data); resolution is in `commands.ts`. Three kinds:
+
+- `reply` answers the request itself, without a model call — `/help` returns the contents of `docs/help/HELP.md`. The reply reports `model: "spekter"`.
+- `context` appends text or a file to the system prompt for that request — `/plan`, `/recap` (inline text), `/sales-prep` (reads `skills/sales-prep/SKILL.md`). Every file a command pulls in becomes a `command_file` source.
+- `options` sets per-request behavior — `/fast` (no reasoning), `/smart` (medium reasoning). An options command can also pin a `model`, which beats both the request's `model` field and `SPEKTER_MODEL`.
+
+A command file that cannot be read fails as `not_configured`, naming the file.
 
 ```bash
 curl -s http://127.0.0.1:3000/api/chat \
@@ -42,7 +56,13 @@ A successful reply:
 }
 ```
 
-`sources` lists the external sources that went into the reply, and is `[]` when there were none. Each entry has a `type`; today the only type is `knowledge_file`, whose `path` is relative to `SPEKTER_KNOWLEDGE_DIR`. Every note in the folder is sent with every request, so the list shows what the model was given, not what it relied on.
+`sources` lists the external sources that went into the reply, and is `[]` when there were none. Each entry has a `type`:
+
+- `knowledge_file`, whose `path` is relative to `SPEKTER_KNOWLEDGE_DIR`. Every note in the folder is sent with every request, so these show what the model was given, not what it relied on.
+- `command_file`, whose `path` is a file a slash command pulled in.
+- `tool`, whose `name` is a tool that returned a result for this reply. Each tool is listed once, after the files, in the order it was first called. Failed tool calls are not listed.
+
+When the model writes text before calling a tool, `message.content` holds only the text from its last step. The stream sends all of it as it arrives.
 
 Rules: send `Content-Type: application/json`, roles are `user` or `assistant`, content must not be empty or whitespace, and the last message must be from the user. Requests must be addressed to `127.0.0.1` or `localhost`.
 
@@ -52,8 +72,8 @@ Errors always have the shape `{ "error": { "code", "message" } }`:
 | --- | --- | --- |
 | 400 | `invalid_request` | Body is not JSON or the conversation breaks the rules above |
 | 403 | `forbidden` | The request was not addressed to `127.0.0.1` or `localhost` |
-| 503 | `not_configured` | `OPENROUTER_API_KEY` or `SPEKTER_MODEL` is missing, or the `SPEKTER_SYSTEM_PROMPT` file or `SPEKTER_KNOWLEDGE_DIR` folder cannot be read |
-| 502 | `provider_error` | OpenRouter or the model failed, the conversation and notes exceed the model's context limit, or the model returned an empty or cut-off reply; the message says why |
+| 503 | `not_configured` | `OPENROUTER_API_KEY` or `SPEKTER_MODEL` is missing, the `SPEKTER_SYSTEM_PROMPT` file, `SPEKTER_KNOWLEDGE_DIR` folder, or a slash-command file cannot be read, or `SPEKTER_MAX_STEPS` is not a positive whole number |
+| 502 | `provider_error` | OpenRouter or the model failed, the conversation and notes exceed the model's context limit, or the model returned an empty or cut-off reply (including still asking for tools after its last step); the message says why |
 | 500 | `internal_error` | Something unexpected went wrong on the server |
 
 ### Streaming
@@ -77,7 +97,10 @@ The response is `application/x-ndjson`: one JSON frame per line.
 | Frame | Meaning |
 | --- | --- |
 | `{ "type": "delta", "text" }` | The next piece of the reply; join them in order |
+| `{ "type": "reasoning", "text" }` | The next piece of the model's reasoning, when it exposes any; join them in order |
 | `{ "type": "sources", "sources" }` | Sent first when external sources were read for this reply, so clients can show them before the text arrives |
+| `{ "type": "tool_call", "id", "name", "input" }` | The model called the tool `name`; `id` identifies this call and `input` holds its arguments |
+| `{ "type": "tool_result", "id", "name", "ok" }` | The call with that `id` finished; `ok` is `false` when the tool failed |
 | `{ "type": "done", "model", "sources" }` | The reply is complete; `sources` is the same list `POST /api/chat` returns |
 | `{ "type": "error", "code", "message" }` | The reply failed; any text already received is not a complete reply |
 
@@ -95,7 +118,7 @@ Every request that reaches either chat endpoint appends one JSON line to `logs/r
 | --- | --- |
 | `timestamp` | When the request arrived (UTC) |
 | `endpoint` | `chat` or `chat_stream` |
-| `model` | `SPEKTER_MODEL` at the time, or `null` if unset |
+| `model` | `SPEKTER_MODEL` at the time, or `null` if unset — per-request picks and command overrides are not reflected |
 | `outcome` | `reply`, `error`, or `aborted` (the client closed a stream before it finished) |
 | `errorCode` | Only on errors: one of the error codes above |
 | `durationMs` | Time until the reply completed, failed, or was stopped |

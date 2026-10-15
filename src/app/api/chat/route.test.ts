@@ -77,6 +77,34 @@ describe("POST /api/chat", () => {
     expect(createOpenRouterModel).not.toHaveBeenCalled();
   });
 
+  it("offers the built-in current_time tool to the model", async () => {
+    const model = replyingModel("Hi.");
+    stubOpenRouterModel(model);
+
+    await POST(chatRequest(conversation));
+
+    expect(model.doGenerateCalls[0].tools?.map((tool) => tool.name)).toEqual([
+      "current_time",
+      "list_files",
+      "read_file",
+      "write_file",
+      "edit_file",
+      "delete_file",
+    ]);
+  });
+
+  it("returns 503 not_configured naming SPEKTER_MAX_STEPS without calling the model when it is invalid", async () => {
+    vi.stubEnv("SPEKTER_MAX_STEPS", "zero");
+
+    const response = await POST(chatRequest(conversation));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error.code).toBe("not_configured");
+    expect(body.error.message).toContain("SPEKTER_MAX_STEPS");
+    expect(createOpenRouterModel).not.toHaveBeenCalled();
+  });
+
   it("sends the configured system prompt to the model and keeps the success shape", async () => {
     const path = join(promptDir, "prompt.md");
     await writeFile(path, "Answer in exactly one word.");

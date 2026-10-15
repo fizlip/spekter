@@ -88,6 +88,35 @@ describe("POST /api/chat/stream", () => {
     expect(createOpenRouterModel).not.toHaveBeenCalled();
   });
 
+  it("offers the built-in current_time tool to the model", async () => {
+    const model = streamingModel([...textParts(["Hi."]), finishPart()]);
+    stubOpenRouterModel(model);
+
+    await readFrames(await POST(streamRequest(conversation)));
+
+    expect(model.doStreamCalls[0].tools?.map((tool) => tool.name)).toEqual([
+      "current_time",
+      "list_files",
+      "read_file",
+      "write_file",
+      "edit_file",
+      "delete_file",
+    ]);
+  });
+
+  it("returns the 503 not_configured JSON error before the stream starts when SPEKTER_MAX_STEPS is invalid", async () => {
+    vi.stubEnv("SPEKTER_MAX_STEPS", "0");
+
+    const response = await POST(streamRequest(conversation));
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    const body = await response.json();
+    expect(body.error.code).toBe("not_configured");
+    expect(body.error.message).toContain("SPEKTER_MAX_STEPS");
+    expect(createOpenRouterModel).not.toHaveBeenCalled();
+  });
+
   it("streams the configured system prompt to the model without changing the frames", async () => {
     const path = join(promptDir, "prompt.md");
     await writeFile(path, "Answer in exactly one word.");

@@ -1,4 +1,4 @@
-import { parseChatRequest, type ChatMessage } from "@/core/chat/contract";
+import { parseChatRequest, type ChatRequest } from "@/core/chat/contract";
 import { InvalidRequestError, SpekterError, type ErrorCode } from "@/core/errors";
 
 const statusByCode: Record<ErrorCode, number> = {
@@ -7,11 +7,11 @@ const statusByCode: Record<ErrorCode, number> = {
   provider_error: 502,
 };
 
-export async function readChatMessages(request: Request): Promise<ChatMessage[]> {
+export async function readChatRequest(request: Request): Promise<ChatRequest> {
   const body = await request.json().catch(() => {
     throw new InvalidRequestError("Request body must be valid JSON");
   });
-  return parseChatRequest(body).messages;
+  return parseChatRequest(body);
 }
 
 export function errorResponse(error: unknown, routeLabel: string): Response {
