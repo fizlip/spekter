@@ -44,6 +44,9 @@ next-env.d.ts
 # request log (SPE-3)
 /logs
 
+# sandboxd state: isolated Lima home, box state files
+/.sandbox/
+
 # agent-managed content — the file tools read/write here at runtime
 /knowledge/
 /skills/
