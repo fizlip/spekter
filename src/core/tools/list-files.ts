@@ -33,7 +33,10 @@ export const listFilesTool: SpekterTool<typeof inputSchema, { files: string[] }>
     "List files, recursively. With no path it lists every allowed folder; a path must point inside an allowed folder.",
   inputSchema,
   execute: async ({ path }) => {
-    const roots = path ? [resolveScopedPath(path)] : fileToolDirs().map((dir) => resolve(dir));
+    // Validate the folder, but walk the path as given so listed paths stay relative to the
+    // project; the walk itself never follows links.
+    if (path) await resolveScopedPath(path);
+    const roots = path ? [resolve(path)] : fileToolDirs().map((dir) => resolve(dir));
     const base = resolve();
     const files = (await Promise.all(roots.map((dir) => walk(dir, base)))).flat().sort();
     return { files };
