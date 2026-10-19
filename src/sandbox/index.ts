@@ -11,8 +11,9 @@ const REAP_INTERVAL_MS = 30_000;
 async function main() {
   const config = readSandboxConfig();
   const log = createEventLog(config.logPath);
+  const { backend } = createFakeBackend();
   const boxes = createBoxRegistry({
-    backend: createFakeBackend().backend,
+    backend,
     stateDir: join(config.sandboxDir, "boxes"),
     workspaceRoot: config.workspaceRoot,
     maxBoxes: config.maxBoxes,
@@ -21,7 +22,13 @@ async function main() {
   });
   await boxes.reconcile();
   boxes.startReaper(REAP_INTERVAL_MS);
-  await serve(createHandler({ token: config.token, routes: boxRoutes(boxes) }), config.port);
+  const routes = boxRoutes({
+    boxes,
+    backend,
+    log,
+    exec: { defaultSeconds: config.execDefaultSeconds, maxSeconds: config.execMaxSeconds },
+  });
+  await serve(createHandler({ token: config.token, routes }), config.port);
   await log("daemon_start", { port: config.port });
   console.log(`sandboxd listening on http://127.0.0.1:${config.port}`);
 }

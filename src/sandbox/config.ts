@@ -14,6 +14,10 @@ export type SandboxConfig = {
   workspaceRoot: string;
   maxBoxes: number;
   ttlSeconds: number;
+  // Default and ceiling for one command's run time. The default sits below Spekter's tool
+  // budget, so a long command comes back as a timed-out result with output, not a dropped call.
+  execDefaultSeconds: number;
+  execMaxSeconds: number;
 };
 
 export const DEFAULT_PORT = 3210;
@@ -67,5 +71,7 @@ export function readSandboxConfig(env: Env = process.env): SandboxConfig {
     workspaceRoot: readWorkspaceRoot(env),
     maxBoxes: readPositiveIntEnv(env, "SANDBOX_MAX_BOXES", 4),
     ttlSeconds: readPositiveIntEnv(env, "SANDBOX_TTL_SECONDS", 1800),
+    execDefaultSeconds: readPositiveIntEnv(env, "SANDBOX_EXEC_SECONDS", 90),
+    execMaxSeconds: readPositiveIntEnv(env, "SANDBOX_EXEC_MAX_SECONDS", 600),
   };
 }

@@ -16,6 +16,8 @@ describe("readSandboxConfig", () => {
       workspaceRoot: join(homedir(), "spekter-workspace"),
       maxBoxes: 4,
       ttlSeconds: 1800,
+      execDefaultSeconds: 90,
+      execMaxSeconds: 600,
     });
   });
 
@@ -59,7 +61,7 @@ describe("readSandboxConfig", () => {
     );
   });
 
-  it.each(["SANDBOX_PORT", "SANDBOX_MAX_BOXES", "SANDBOX_TTL_SECONDS"])("rejects bad values of %s, naming the variable", (name) => {
+  it.each(["SANDBOX_PORT", "SANDBOX_MAX_BOXES", "SANDBOX_TTL_SECONDS", "SANDBOX_EXEC_SECONDS", "SANDBOX_EXEC_MAX_SECONDS"])("rejects bad values of %s, naming the variable", (name) => {
     for (const value of ["abc", "0", "-1", "80.5"]) {
       expect(() => readSandboxConfig({ SANDBOX_TOKEN: token, [name]: value })).toThrow(
         new SandboxError("not_configured", `${name} must be a positive whole number, got "${value}"`),

@@ -12,15 +12,17 @@ let handler: (request: Request) => Promise<Response>;
 
 beforeEach(async () => {
   const dir = await mkdtemp(join(tmpdir(), "sandboxd-routes-"));
+  const { backend } = createFakeBackend();
+  const log = async () => {};
   const boxes = createBoxRegistry({
-    backend: createFakeBackend().backend,
+    backend,
     stateDir: join(dir, "boxes"),
     workspaceRoot: join(dir, "workspace"),
     maxBoxes: 4,
     defaultTtlSeconds: 60,
-    log: async () => {},
+    log,
   });
-  handler = createHandler({ token, routes: boxRoutes(boxes) });
+  handler = createHandler({ token, routes: boxRoutes({ boxes, backend, log, exec: { defaultSeconds: 90, maxSeconds: 600 } }) });
 });
 
 function call(method: string, path: string, body?: unknown) {
