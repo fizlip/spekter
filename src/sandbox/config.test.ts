@@ -1,4 +1,5 @@
-import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { readSandboxConfig } from "./config";
 import { SandboxError } from "./wire";
@@ -11,14 +12,36 @@ describe("readSandboxConfig", () => {
       port: 3210,
       token,
       logPath: resolve("logs/sandboxd.jsonl"),
+      sandboxDir: resolve(".sandbox"),
+      workspaceRoot: join(homedir(), "spekter-workspace"),
+      maxBoxes: 4,
+      ttlSeconds: 1800,
     });
   });
 
-  it("reads port and log path overrides", () => {
-    expect(readSandboxConfig({ SANDBOX_TOKEN: token, SANDBOX_PORT: " 4321 ", SANDBOX_LOG: "/tmp/x.jsonl" })).toMatchObject({
+  it("reads overrides, expanding ~ in the workspace root", () => {
+    expect(
+      readSandboxConfig({
+        SANDBOX_TOKEN: token,
+        SANDBOX_PORT: " 4321 ",
+        SANDBOX_LOG: "/tmp/x.jsonl",
+        SANDBOX_WORKSPACE_ROOT: "~/elsewhere",
+        SANDBOX_MAX_BOXES: "2",
+        SANDBOX_TTL_SECONDS: "60",
+      }),
+    ).toMatchObject({
       port: 4321,
       logPath: "/tmp/x.jsonl",
+      workspaceRoot: join(homedir(), "elsewhere"),
+      maxBoxes: 2,
+      ttlSeconds: 60,
     });
+  });
+
+  it("refuses a workspace root inside the repo, where host tooling would walk guest-written files", () => {
+    expect(() => readSandboxConfig({ SANDBOX_TOKEN: token, SANDBOX_WORKSPACE_ROOT: "workspace" })).toThrow(
+      new SandboxError("not_configured", `SANDBOX_WORKSPACE_ROOT must be outside the project (${resolve()})`),
+    );
   });
 
   it.each([["unset", {}], ["blank", { SANDBOX_TOKEN: "   " }]])("refuses to boot when SANDBOX_TOKEN is %s", (_label, env) => {
@@ -36,9 +59,11 @@ describe("readSandboxConfig", () => {
     );
   });
 
-  it.each(["abc", "0", "-1", "80.5"])("rejects SANDBOX_PORT=%s, naming the variable", (value) => {
-    expect(() => readSandboxConfig({ SANDBOX_TOKEN: token, SANDBOX_PORT: value })).toThrow(
-      new SandboxError("not_configured", `SANDBOX_PORT must be a positive whole number, got "${value}"`),
-    );
+  it.each(["SANDBOX_PORT", "SANDBOX_MAX_BOXES", "SANDBOX_TTL_SECONDS"])("rejects bad values of %s, naming the variable", (name) => {
+    for (const value of ["abc", "0", "-1", "80.5"]) {
+      expect(() => readSandboxConfig({ SANDBOX_TOKEN: token, [name]: value })).toThrow(
+        new SandboxError("not_configured", `${name} must be a positive whole number, got "${value}"`),
+      );
+    }
   });
 });
