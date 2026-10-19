@@ -18,6 +18,8 @@ export type SandboxConfig = {
   // budget, so a long command comes back as a timed-out result with output, not a dropped call.
   execDefaultSeconds: number;
   execMaxSeconds: number;
+  // Per-box VM size. The disk cap bounds the guest's own disk only; workspace writes land on the host.
+  caps: { cpus: number; memoryGiB: number; diskGiB: number };
 };
 
 export const DEFAULT_PORT = 3210;
@@ -69,9 +71,14 @@ export function readSandboxConfig(env: Env = process.env): SandboxConfig {
     logPath: resolve(env.SANDBOX_LOG?.trim() || DEFAULT_LOG_PATH),
     sandboxDir: resolve(".sandbox"),
     workspaceRoot: readWorkspaceRoot(env),
-    maxBoxes: readPositiveIntEnv(env, "SANDBOX_MAX_BOXES", 4),
+    maxBoxes: readPositiveIntEnv(env, "SANDBOX_MAX_BOXES", 2),
     ttlSeconds: readPositiveIntEnv(env, "SANDBOX_TTL_SECONDS", 1800),
     execDefaultSeconds: readPositiveIntEnv(env, "SANDBOX_EXEC_SECONDS", 90),
     execMaxSeconds: readPositiveIntEnv(env, "SANDBOX_EXEC_MAX_SECONDS", 600),
+    caps: {
+      cpus: readPositiveIntEnv(env, "SANDBOX_CPUS", 2),
+      memoryGiB: readPositiveIntEnv(env, "SANDBOX_MEMORY_GIB", 4),
+      diskGiB: readPositiveIntEnv(env, "SANDBOX_DISK_GIB", 20),
+    },
   };
 }

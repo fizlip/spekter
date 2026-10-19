@@ -1,5 +1,6 @@
 import { join } from "node:path";
-import { createFakeBackend } from "./backend/fake";
+import { createLimaBackend } from "./backend/lima";
+import { DEFAULT_IMAGE } from "./backend/lima-yaml";
 import { createBoxRegistry } from "./boxes";
 import { readSandboxConfig } from "./config";
 import { createEventLog } from "./log";
@@ -11,7 +12,12 @@ const REAP_INTERVAL_MS = 30_000;
 async function main() {
   const config = readSandboxConfig();
   const log = createEventLog(config.logPath);
-  const { backend } = createFakeBackend();
+  const backend = createLimaBackend({
+    limaHome: join(config.sandboxDir, "lima"),
+    configDir: join(config.sandboxDir, "configs"),
+    image: DEFAULT_IMAGE,
+    caps: config.caps,
+  });
   const boxes = createBoxRegistry({
     backend,
     stateDir: join(config.sandboxDir, "boxes"),

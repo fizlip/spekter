@@ -14,10 +14,11 @@ describe("readSandboxConfig", () => {
       logPath: resolve("logs/sandboxd.jsonl"),
       sandboxDir: resolve(".sandbox"),
       workspaceRoot: join(homedir(), "spekter-workspace"),
-      maxBoxes: 4,
+      maxBoxes: 2,
       ttlSeconds: 1800,
       execDefaultSeconds: 90,
       execMaxSeconds: 600,
+      caps: { cpus: 2, memoryGiB: 4, diskGiB: 20 },
     });
   });
 
@@ -28,14 +29,14 @@ describe("readSandboxConfig", () => {
         SANDBOX_PORT: " 4321 ",
         SANDBOX_LOG: "/tmp/x.jsonl",
         SANDBOX_WORKSPACE_ROOT: "~/elsewhere",
-        SANDBOX_MAX_BOXES: "2",
+        SANDBOX_MAX_BOXES: "3",
         SANDBOX_TTL_SECONDS: "60",
       }),
     ).toMatchObject({
       port: 4321,
       logPath: "/tmp/x.jsonl",
       workspaceRoot: join(homedir(), "elsewhere"),
-      maxBoxes: 2,
+      maxBoxes: 3,
       ttlSeconds: 60,
     });
   });
