@@ -1,4 +1,10 @@
+import type { BoxInfo } from "./boxes";
+import type { ExecResult } from "./exec";
 import { SandboxError, type ErrorEnvelope } from "./wire";
+
+export type CreateOptions = { name?: string; ttlSeconds?: number };
+export type ExecOptions = { cmd: string; workdir?: string; timeoutSeconds?: number };
+export type ExecResponse = { boxId: string } & Omit<ExecResult, "outcome">;
 
 export class SandboxUnreachableError extends Error {
   constructor(message: string) {
@@ -36,9 +42,17 @@ export function createSandboxClient({ url, token }: SandboxClientOptions) {
     return data as T;
   }
 
+  const box = (id: string) => `/boxes/${encodeURIComponent(id)}`;
+
   return {
     request,
     health: (signal?: AbortSignal) => request<{ ok: true }>("GET", "/healthz", undefined, signal),
+    create: (options: CreateOptions = {}, signal?: AbortSignal) => request<BoxInfo>("POST", "/boxes", options, signal),
+    list: (signal?: AbortSignal) => request<{ boxes: BoxInfo[] }>("GET", "/boxes", undefined, signal),
+    inspect: (id: string, signal?: AbortSignal) => request<BoxInfo>("GET", box(id), undefined, signal),
+    destroy: (id: string, signal?: AbortSignal) => request<{ id: string; destroyed: true }>("DELETE", box(id), undefined, signal),
+    exec: (id: string, options: ExecOptions, signal?: AbortSignal) =>
+      request<ExecResponse>("POST", `${box(id)}/exec`, options, signal),
   };
 }
 

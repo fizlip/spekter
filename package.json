@@ -8,6 +8,7 @@
     "start": "next start -H 127.0.0.1",
     "bot": "node --env-file=.env.local --import tsx src/interfaces/discord/index.ts",
     "sandboxd": "node --env-file=.env.local --import tsx src/sandbox/index.ts",
+    "sandbox": "node --env-file=.env.local --import tsx src/sandbox/cli.ts",
     "lint": "eslint",
     "test": "vitest run"
   },
