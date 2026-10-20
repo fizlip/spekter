@@ -13,6 +13,7 @@ const box = {
 };
 const execResult = {
   boxId: "b1",
+  workspaceDir: "/Users/f/spekter-workspace/b1",
   exitCode: 0,
   stdout: "Linux\n",
   stderr: "",

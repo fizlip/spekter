@@ -4,7 +4,7 @@ import { SandboxError, type ErrorEnvelope } from "./wire";
 
 export type CreateOptions = { name?: string; ttlSeconds?: number };
 export type ExecOptions = { cmd: string; workdir?: string; timeoutSeconds?: number };
-export type ExecResponse = { boxId: string } & Omit<ExecResult, "outcome">;
+export type ExecResponse = { boxId: string; workspaceDir: string } & Omit<ExecResult, "outcome">;
 
 export class SandboxUnreachableError extends Error {
   constructor(message: string) {

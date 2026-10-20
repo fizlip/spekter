@@ -5,27 +5,32 @@ import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { deleteFileTool } from "./delete-file";
 import { editFileTool } from "./edit-file";
-import { listFilesTool } from "./list-files";
+import { listFilesTool, MAX_LISTED_FILES } from "./list-files";
 import { MAX_READ_BYTES, readFileTool } from "./read-file";
 import { writeFileTool } from "./write-file";
 
 // The tools resolve paths against cwd, so tests run in a temp dir carrying the
 // default scopes (skills/, knowledge/).
 let workDir: string;
+let homeDir: string;
 let cwdSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(async () => {
   workDir = join(tmpdir(), `spekter-files-${Math.random().toString(36).slice(2)}`);
+  homeDir = `${workDir}-home`;
   await mkdir(join(workDir, "skills"), { recursive: true });
   await mkdir(join(workDir, "knowledge"), { recursive: true });
   cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(workDir);
   vi.stubEnv("SPEKTER_FILE_DIRS", "");
+  // The default scope includes ~/spekter-workspace; point ~ at the temp dir, never the real home.
+  vi.stubEnv("HOME", homeDir);
 });
 
 afterEach(async () => {
   cwdSpy.mockRestore();
   vi.unstubAllEnvs();
   await rm(workDir, { recursive: true, force: true });
+  await rm(homeDir, { recursive: true, force: true });
 });
 
 describe("read_file", () => {
@@ -64,6 +69,45 @@ describe("list_files", () => {
   it("skips hidden files", async () => {
     await writeFile(join(workDir, "knowledge", ".hidden.md"), "");
     expect((await listFilesTool.execute({}, {})).files).toEqual([]);
+  });
+
+  it("lists sandbox workspace files by absolute path, since they live outside the project", async () => {
+    const box = join(homeDir, "spekter-workspace", "b1");
+    await mkdir(box, { recursive: true });
+    await writeFile(join(box, "out.txt"), "");
+    await writeFile(join(workDir, "knowledge", "b.md"), "");
+
+    expect((await listFilesTool.execute({}, {})).files).toEqual([join(box, "out.txt"), "knowledge/b.md"]);
+  });
+
+  it(`stops at ${MAX_LISTED_FILES} files and says so, so a guest's node_modules cannot flood the context`, async () => {
+    const box = join(homeDir, "spekter-workspace", "b1");
+    await mkdir(box, { recursive: true });
+    await Promise.all(Array.from({ length: MAX_LISTED_FILES + 5 }, (_, i) => writeFile(join(box, `f${i}`), "")));
+
+    const result = await listFilesTool.execute({}, {});
+
+    expect(result.files).toHaveLength(MAX_LISTED_FILES);
+    expect(result.truncated).toBe(true);
+  });
+});
+
+describe("sandbox workspace scope", () => {
+  it("is in the default scope: read_file reaches a box's workspace by absolute path", async () => {
+    const file = join(homeDir, "spekter-workspace", "b1", "report.md");
+    await mkdir(join(file, ".."), { recursive: true });
+    await writeFile(file, "done");
+
+    expect(await readFileTool.execute({ path: file }, {})).toMatchObject({ content: "done" });
+  });
+
+  it("expands ~ in a configured folder to the home directory", async () => {
+    vi.stubEnv("SPEKTER_FILE_DIRS", "~/elsewhere");
+    await mkdir(join(homeDir, "elsewhere"), { recursive: true });
+    await writeFile(join(homeDir, "elsewhere", "a.md"), "a");
+
+    expect(await readFileTool.execute({ path: "~/elsewhere/a.md" }, {})).toMatchObject({ content: "a" });
+    await expect(readFileTool.execute({ path: "knowledge/b.md" }, {})).rejects.toThrow("must stay inside");
   });
 });
 

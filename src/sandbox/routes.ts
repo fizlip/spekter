@@ -50,7 +50,8 @@ export function boxRoutes({ boxes, backend, log, exec }: RouteOptions): Route[] 
         if (timeoutSeconds > exec.maxSeconds) {
           throw new SandboxError("invalid_request", `timeoutSeconds must be at most ${exec.maxSeconds}`);
         }
-        const { outcome, ...result } = await boxes.runExec(assertBoxId(id), () =>
+        const { workspaceDir } = boxes.get(assertBoxId(id));
+        const { outcome, ...result } = await boxes.runExec(id, () =>
           runCommand(backend.exec(id, { cmd, workdir }), { timeoutMs: timeoutSeconds * 1000, signal: request.signal }),
         );
         await log("exec", {
@@ -60,7 +61,7 @@ export function boxRoutes({ boxes, backend, log, exec }: RouteOptions): Route[] 
           truncated: result.truncated,
           outcome,
         });
-        return json({ boxId: id, ...result });
+        return json({ boxId: id, workspaceDir, ...result });
       },
     },
   ];

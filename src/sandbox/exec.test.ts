@@ -66,6 +66,7 @@ describe("POST /boxes/:id/exec", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       boxId: "a",
+      workspaceDir: expect.stringMatching(/\/a$/),
       exitCode: 3,
       stdout: "hi\n",
       stderr: "oops\n",

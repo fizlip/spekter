@@ -32,6 +32,8 @@ describe("builtinTools", () => {
       "write_file",
       "edit_file",
       "delete_file",
+      "sandbox_exec",
+      "sandbox_destroy",
     ]);
     expect(builtinTools.every((tool) => tool.description !== "")).toBe(true);
   });

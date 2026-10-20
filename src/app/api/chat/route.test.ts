@@ -90,6 +90,8 @@ describe("POST /api/chat", () => {
       "write_file",
       "edit_file",
       "delete_file",
+      "sandbox_exec",
+      "sandbox_destroy",
     ]);
   });
 
