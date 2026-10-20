@@ -7,7 +7,15 @@ import type { Env } from "../config";
 import { limaConfig, type ImageRef } from "./lima-yaml";
 import type { Backend, ExecHandle, Instance, InstanceStatus } from "./types";
 
-const PREFIX = "spekter-sandbox-";
+// Kept short: the instance name is part of Lima's socket path (see limaHomeFits).
+export const PREFIX = "spekter-";
+// Lima's longest socket: <LIMA_HOME>/<instance>/ssh.sock.<16 digits>, under macOS's 104-byte cap.
+const UNIX_PATH_MAX = 104;
+const LONGEST_SOCKET_SUFFIX = "/ssh.sock.1234567890123456";
+
+export function limaHomeFits(limaHome: string, maxIdLength: number): boolean {
+  return `${limaHome}/${PREFIX}${"x".repeat(maxIdLength)}${LONGEST_SOCKET_SUFFIX}`.length < UNIX_PATH_MAX;
+}
 const READY_ATTEMPTS = 5;
 const READY_RETRY_MS = 1000;
 
@@ -21,6 +29,7 @@ export type LimaBackendOptions = {
   spawn?: (command: string, args: string[], options: SpawnOptions) => ChildProcess;
   env?: Env;
   sleep?: (ms: number) => Promise<void>;
+  killGroup?: (pid: number, signal: NodeJS.Signals) => void;
 };
 
 type LimaInstance = { name?: string; status?: string; errors?: string[]; config?: { mounts?: { location?: string }[] } };
@@ -39,10 +48,19 @@ function limaError(stderr: string): string {
 const pidFile = (execId: string) => `/tmp/spekter-exec/${execId}.pid`;
 const wrapper = (execId: string) =>
   `mkdir -p /tmp/spekter-exec && exec setsid -w sh -c 'echo $$ > ${pidFile(execId)} && exec sh -c "$1"' sandbox "$1"`;
+// No "--" before the negative PID: the guest's /bin/sh is dash, whose kill rejects it.
 const killScript = (execId: string) =>
-  `P=$(cat ${pidFile(execId)} 2>/dev/null) || exit 0; kill -TERM -- -$P 2>/dev/null; ` +
-  `for i in 1 2 3 4; do kill -0 -- -$P 2>/dev/null || break; sleep 0.5; done; ` +
-  `kill -KILL -- -$P 2>/dev/null; rm -f ${pidFile(execId)}; exit 0`;
+  `P=$(cat ${pidFile(execId)} 2>/dev/null) || exit 0; kill -TERM -$P 2>/dev/null; ` +
+  `for i in 1 2 3 4; do kill -0 -$P 2>/dev/null || break; sleep 0.5; done; ` +
+  `kill -KILL -$P 2>/dev/null; rm -f ${pidFile(execId)}; exit 0`;
+
+function killProcessGroup(pid: number, signal: NodeJS.Signals) {
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    // Already gone.
+  }
+}
 
 export function createLimaBackend({
   limaHome,
@@ -52,13 +70,14 @@ export function createLimaBackend({
   spawn = nodeSpawn,
   env = process.env,
   sleep = (ms) => delay(ms).then(() => {}),
+  killGroup = killProcessGroup,
 }: LimaBackendOptions): Backend {
   // Only what limactl needs: the daemon's own environment carries SANDBOX_TOKEN and other
   // secrets loaded from .env.local, and none of it may reach Lima or a guest.
   const limaEnv: Partial<NodeJS.ProcessEnv> = { PATH: env.PATH, HOME: env.HOME, LIMA_HOME: limaHome };
 
-  function limactl(args: string[], stdio: SpawnOptions["stdio"] = ["ignore", "pipe", "pipe"]): ChildProcess {
-    return spawn("limactl", args, { env: limaEnv as NodeJS.ProcessEnv, stdio });
+  function limactl(args: string[], extra: SpawnOptions = {}): ChildProcess {
+    return spawn("limactl", args, { env: limaEnv as NodeJS.ProcessEnv, stdio: ["ignore", "pipe", "pipe"], ...extra });
   }
 
   function run(args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
@@ -140,7 +159,11 @@ export function createLimaBackend({
     exec(id, { cmd, workdir }): ExecHandle {
       const name = instanceName(id);
       const execId = randomBytes(8).toString("hex");
-      const child = limactl(["shell", "--tty=false", "--workdir", workdir, name, "--", "sh", "-c", wrapper(execId), "sandbox", cmd]);
+      // Own process group: limactl forks ssh, and killing limactl alone orphans that ssh, which
+      // keeps the output pipes open so the exec never closes.
+      const child = limactl(["shell", "--tty=false", "--workdir", workdir, name, "--", "sh", "-c", wrapper(execId), "sandbox", cmd], {
+        detached: true,
+      });
       const exited = new Promise<number | null>((resolve) => {
         child.on("close", (code) => resolve(code));
         child.on("error", () => resolve(null));
@@ -153,7 +176,8 @@ export function createLimaBackend({
         // guest never sees a hangup. So kill the process group inside the guest first.
         kill: async () => {
           await run(["shell", "--tty=false", name, "--", "sh", "-c", killScript(execId)]);
-          child.kill("SIGTERM");
+          if (child.pid === undefined) child.kill("SIGTERM");
+          else killGroup(child.pid, "SIGTERM");
         },
       };
     },

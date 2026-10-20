@@ -73,7 +73,7 @@ beforeEach(async () => {
   configDir = await mkdtemp(join(tmpdir(), "sandboxd-lima-"));
   reply = (args) =>
     args[0] === "list"
-      ? { stdout: listing({ name: "spekter-sandbox-b1", status: "Running", config: mountsOf("/ws/b1") }) }
+      ? { stdout: listing({ name: "spekter-b1", status: "Running", config: mountsOf("/ws/b1") }) }
       : {};
 });
 
@@ -94,13 +94,13 @@ describe("Lima backend", () => {
     reply = (args) => {
       // Read while create runs: the config file is removed once the box is up.
       if (args[0] === "create") config = JSON.parse(readFileSync(args.at(-1)!, "utf-8"));
-      return args[0] === "list" ? { stdout: listing({ name: "spekter-sandbox-b1", status: "Stopped", config: mountsOf("/ws/b1") }) } : {};
+      return args[0] === "list" ? { stdout: listing({ name: "spekter-b1", status: "Stopped", config: mountsOf("/ws/b1") }) } : {};
     };
 
     await backend().create({ id: "b1", workspaceDir: "/ws/b1" });
 
     expect(calls.map(sub)).toEqual(["create", "list", "start", "shell"]);
-    expect(calls[0].args).toContain("--name=spekter-sandbox-b1");
+    expect(calls[0].args).toContain("--name=spekter-b1");
     expect(config.mounts).toEqual([{ location: "/ws/b1", mountPoint: "/workspace", writable: true }]);
     expect(await readdir(configDir)).toEqual([]);
   });
@@ -109,7 +109,7 @@ describe("Lima backend", () => {
     ["an extra home-folder mount", mountsOf("/ws/b1", "/Users/f")],
     ["a missing workspace mount", mountsOf()],
   ])("refuses to start a box whose effective config has %s", async (_label, config) => {
-    reply = (args) => (args[0] === "list" ? { stdout: listing({ name: "spekter-sandbox-b1", status: "Stopped", config }) } : {});
+    reply = (args) => (args[0] === "list" ? { stdout: listing({ name: "spekter-b1", status: "Stopped", config }) } : {});
 
     await expect(backend().create({ id: "b1", workspaceDir: "/ws/b1" })).rejects.toThrow("unexpected host mounts");
     expect(calls.map(sub)).not.toContain("start");
@@ -141,7 +141,7 @@ describe("Lima backend", () => {
     const handle = backend().exec("b1", { cmd, workdir: "/workspace/app" });
 
     const args = calls[0].args;
-    expect(args.slice(0, 6)).toEqual(["shell", "--tty=false", "--workdir", "/workspace/app", "spekter-sandbox-b1", "--"]);
+    expect(args.slice(0, 6)).toEqual(["shell", "--tty=false", "--workdir", "/workspace/app", "spekter-b1", "--"]);
     expect(args.at(-1)).toBe(cmd);
     expect(calls[0].options.stdio).toEqual(["ignore", "pipe", "pipe"]);
     expect(await handle.exited).toBe(7);
@@ -158,9 +158,37 @@ describe("Lima backend", () => {
     const pidFile = wrapper.match(/\/tmp\/spekter-exec\/[0-9a-f]+\.pid/)?.[0];
     expect(pidFile).toBeDefined();
     expect(killScript).toContain(pidFile);
-    expect(killScript).toContain("kill -TERM --");
+    // The guest's /bin/sh is dash, whose kill rejects a "--" separator and kills nothing.
+    expect(killScript).toContain("kill -TERM -$P");
+    expect(killScript).not.toContain("kill -TERM --");
     expect(`${wrapper} ${killScript}`).not.toContain("/workspace/");
-    expect(calls[0].child.signals).toEqual(["SIGTERM"]);
+    expect(await handle.exited).toBeNull();
+  });
+
+  it("runs each exec in its own host process group and kills the whole group, so no orphaned ssh holds it open", async () => {
+    reply = (args) => (args.includes("sleep 1000") ? "hang" : {});
+    const killed: [number, string][] = [];
+    const handle = createLimaBackend({
+      limaHome: "/repo/.sandbox/lima",
+      configDir,
+      image: DEFAULT_IMAGE,
+      caps: { cpus: 2, memoryGiB: 4, diskGiB: 20 },
+      spawn: ((command: string, args: string[], options: SpawnOptions) => {
+        const child = spawn(command, args, options);
+        Object.defineProperty(child, "pid", { value: 4242 });
+        return child;
+      }) as never,
+      env: { PATH: "/usr/bin", HOME: "/Users/f" },
+      killGroup: (pid, signal) => {
+        killed.push([pid, signal]);
+        calls[0].child.finish(null);
+      },
+    }).exec("b1", { cmd: "sleep 1000", workdir: "/workspace" });
+
+    await handle.kill();
+
+    expect(calls[0].options.detached).toBe(true);
+    expect(killed).toEqual([[4242, "SIGTERM"]]);
     expect(await handle.exited).toBeNull();
   });
 
@@ -168,18 +196,18 @@ describe("Lima backend", () => {
     await backend().destroy("b1");
 
     expect(calls.map((call) => call.args.filter((arg) => arg !== "--tty=false"))).toEqual([
-      ["stop", "-f", "spekter-sandbox-b1"],
-      ["delete", "-f", "spekter-sandbox-b1"],
+      ["stop", "-f", "spekter-b1"],
+      ["delete", "-f", "spekter-b1"],
     ]);
   });
 
   it("lists only sandbox instances, mapping Lima's status", async () => {
     reply = () => ({
       stdout: listing(
-        { name: "spekter-sandbox-a", status: "Running" },
-        { name: "spekter-sandbox-b", status: "Broken" },
-        { name: "spekter-sandbox-c", status: "Running", errors: ["hostagent died"] },
-        { name: "spekter-sandbox-d", status: "Stopped" },
+        { name: "spekter-a", status: "Running" },
+        { name: "spekter-b", status: "Broken" },
+        { name: "spekter-c", status: "Running", errors: ["hostagent died"] },
+        { name: "spekter-d", status: "Stopped" },
         { name: "filips-own-vm", status: "Running" },
       ),
     });
