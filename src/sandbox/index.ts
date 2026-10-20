@@ -13,7 +13,7 @@ async function main() {
   const config = readSandboxConfig();
   const log = createEventLog(config.logPath);
   const backend = createLimaBackend({
-    limaHome: join(config.sandboxDir, "lima"),
+    limaHome: config.limaHome,
     configDir: join(config.sandboxDir, "configs"),
     image: DEFAULT_IMAGE,
     caps: config.caps,

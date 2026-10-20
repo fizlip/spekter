@@ -1,5 +1,7 @@
 import { homedir } from "node:os";
 import { join, resolve, sep } from "node:path";
+import { limaHomeFits } from "./backend/lima";
+import { MAX_BOX_ID_LENGTH } from "./boxes";
 import { SandboxError } from "./wire";
 
 export type Env = Record<string, string | undefined>;
@@ -8,8 +10,10 @@ export type SandboxConfig = {
   port: number;
   token: string;
   logPath: string;
-  // Daemon-written state only (Lima home, box state files); never mounted into a guest.
+  // Daemon-written state only (box state files, configs); never mounted into a guest.
   sandboxDir: string;
+  // Lima's own home, outside the repo because its socket paths must stay under 104 characters.
+  limaHome: string;
   // Parent of every box's host workspace — guest-writable, so it must live outside the project.
   workspaceRoot: string;
   maxBoxes: number;
@@ -25,11 +29,23 @@ export type SandboxConfig = {
 export const DEFAULT_PORT = 3210;
 const DEFAULT_LOG_PATH = "logs/sandboxd.jsonl";
 const DEFAULT_WORKSPACE_ROOT = "~/spekter-workspace";
+const DEFAULT_LIMA_HOME = "~/.spekter-sandbox/lima";
 const MIN_TOKEN_LENGTH = 32;
 
 // Node's path functions treat "~" literally; expand it the way a shell would.
 export function expandHome(path: string): string {
   return path === "~" || path.startsWith("~/") ? join(homedir(), path.slice(1)) : resolve(path);
+}
+
+function readLimaHome(env: Env): string {
+  const limaHome = expandHome(env.SANDBOX_LIMA_HOME?.trim() || DEFAULT_LIMA_HOME);
+  if (!limaHomeFits(limaHome, MAX_BOX_ID_LENGTH)) {
+    throw new SandboxError(
+      "not_configured",
+      `SANDBOX_LIMA_HOME is too long (${limaHome}): Lima's socket paths under it would exceed macOS's 104-character limit`,
+    );
+  }
+  return limaHome;
 }
 
 function readWorkspaceRoot(env: Env): string {
@@ -70,6 +86,7 @@ export function readSandboxConfig(env: Env = process.env): SandboxConfig {
     token: readToken(env),
     logPath: resolve(env.SANDBOX_LOG?.trim() || DEFAULT_LOG_PATH),
     sandboxDir: resolve(".sandbox"),
+    limaHome: readLimaHome(env),
     workspaceRoot: readWorkspaceRoot(env),
     maxBoxes: readPositiveIntEnv(env, "SANDBOX_MAX_BOXES", 2),
     ttlSeconds: readPositiveIntEnv(env, "SANDBOX_TTL_SECONDS", 1800),

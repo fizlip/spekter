@@ -13,6 +13,7 @@ describe("readSandboxConfig", () => {
       token,
       logPath: resolve("logs/sandboxd.jsonl"),
       sandboxDir: resolve(".sandbox"),
+      limaHome: join(homedir(), ".spekter-sandbox", "lima"),
       workspaceRoot: join(homedir(), "spekter-workspace"),
       maxBoxes: 2,
       ttlSeconds: 1800,
@@ -39,6 +40,17 @@ describe("readSandboxConfig", () => {
       maxBoxes: 3,
       ttlSeconds: 60,
     });
+  });
+
+  it("refuses a Lima home too deep for Lima's socket paths, instead of failing on the first create", () => {
+    const deep = `/tmp/${"d".repeat(60)}`;
+
+    expect(() => readSandboxConfig({ SANDBOX_TOKEN: token, SANDBOX_LIMA_HOME: deep })).toThrow(
+      new SandboxError(
+        "not_configured",
+        `SANDBOX_LIMA_HOME is too long (${deep}): Lima's socket paths under it would exceed macOS's 104-character limit`,
+      ),
+    );
   });
 
   it("refuses a workspace root inside the repo, where host tooling would walk guest-written files", () => {

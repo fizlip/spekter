@@ -48,7 +48,7 @@ describe("box lifecycle", () => {
     const box = await boxes.create({});
 
     expect(box).toMatchObject({ state: "ready", ttlSeconds: 60, inflightExecs: 0 });
-    expect(box.id).toMatch(/^[a-z0-9][a-z0-9-]{0,63}$/);
+    expect(box.id).toMatch(/^[a-z0-9][a-z0-9-]{0,19}$/);
     expect(box.workspaceDir).toBe(join(dir, "workspace", box.id));
     expect(await exists(box.workspaceDir)).toBe(true);
     expect(fake.instances.get(box.id)).toBe("running");
@@ -104,7 +104,7 @@ describe("box lifecycle", () => {
     await expect(boxes.create({ name: "a" })).rejects.toThrow(new SandboxError("conflict", 'A box named "a" already exists'));
   });
 
-  it.each(["../escape", "a/b", "Upper", "-lead", "a".repeat(65), ""])("rejects the unsafe name %j before touching any path", async (name) => {
+  it.each(["../escape", "a/b", "Upper", "-lead", "a".repeat(21), ""])("rejects the unsafe name %j before touching any path", async (name) => {
     await expect(registry().create({ name })).rejects.toMatchObject({ code: "invalid_request" });
     expect(fake.calls).toEqual([]);
   });

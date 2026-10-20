@@ -40,13 +40,18 @@ export type BoxRegistryOptions = {
   now?: () => number;
 };
 
-const BOX_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+// Short on purpose: ids end up inside Lima's socket paths, which macOS caps at 104 characters.
+export const MAX_BOX_ID_LENGTH = 20;
+const BOX_ID = new RegExp(`^[a-z0-9][a-z0-9-]{0,${MAX_BOX_ID_LENGTH - 1}}$`);
 
 // Ids become file names, Lima instance names, and registry keys, so only a strict
 // charset ever reaches them — a separator or ".." is a 400, never a path escape.
 export function assertBoxId(id: string): string {
   if (!BOX_ID.test(id)) {
-    throw new SandboxError("invalid_request", `Invalid box name "${id}": use lowercase letters, digits, and dashes (max 64)`);
+    throw new SandboxError(
+      "invalid_request",
+      `Invalid box name "${id}": use lowercase letters, digits, and dashes (max ${MAX_BOX_ID_LENGTH})`,
+    );
   }
   return id;
 }
