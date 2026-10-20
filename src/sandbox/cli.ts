@@ -1,9 +1,13 @@
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { buildGoldenImage, type BuildOptions } from "./backend/image";
+import { DEFAULT_IMAGE } from "./backend/lima-yaml";
 import { createSandboxClient, type ExecResponse } from "./client";
-import { DEFAULT_PORT, type Env } from "./config";
+import { DEFAULT_PORT, readSandboxConfig, type Env } from "./config";
 import type { BoxInfo } from "./boxes";
 
 const USAGE = `Usage:
+  sandbox image build
   sandbox create [--name <id>] [--ttl <seconds>] [--json]
   sandbox exec <box> [--timeout <seconds>] [--workdir <dir>] [--json] [--] <command...>
   sandbox list [--json]
@@ -57,10 +61,11 @@ export type CliIo = {
   stdout: (text: string) => void;
   stderr: (text: string) => void;
   signal?: AbortSignal;
+  buildImage?: (options: BuildOptions) => Promise<void>;
 };
 
 // Returns the process exit code: the command's own for exec, 124 on timeout, 1 on errors, 2 on misuse.
-export async function runCli(argv: string[], { env, stdout, stderr, signal }: CliIo): Promise<number> {
+export async function runCli(argv: string[], { env, stdout, stderr, signal, buildImage = buildGoldenImage }: CliIo): Promise<number> {
   const [command, ...args] = argv;
   try {
     const token = env.SANDBOX_TOKEN?.trim();
@@ -72,6 +77,23 @@ export async function runCli(argv: string[], { env, stdout, stderr, signal }: Cl
     const print = (json: boolean, data: unknown, human: string) => stdout(json ? `${JSON.stringify(data, null, 2)}\n` : human);
 
     switch (command) {
+      case "image": {
+        if (args.length !== 1 || args[0] !== "build") throw new UsageError("Expected `sandbox image build`");
+        // Runs here rather than in sandboxd: a build takes minutes. Boxes created meanwhile
+        // fall back to a cold boot, since only a stopped golden instance is cloned.
+        const config = readSandboxConfig(env);
+        const startedAt = Date.now();
+        await buildImage({
+          limaHome: config.limaHome,
+          configDir: join(config.sandboxDir, "configs"),
+          image: DEFAULT_IMAGE,
+          caps: config.caps,
+          env,
+          progress: (message) => stdout(`${message}...\n`),
+        });
+        stdout(`Golden image ready in ${Math.round((Date.now() - startedAt) / 1000)}s; new boxes clone from it.\n`);
+        return 0;
+      }
       case "create": {
         const parsed = parse(args);
         if (parsed.positionals.length) throw new UsageError("create takes no positional arguments");

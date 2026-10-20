@@ -4,11 +4,14 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Env } from "../config";
-import { limaConfig, type ImageRef } from "./lima-yaml";
+import { limaConfig, type ImageRef, type LimaConfigInput } from "./lima-yaml";
 import type { Backend, ExecHandle, Instance, InstanceStatus } from "./types";
 
 // Kept short: the instance name is part of Lima's socket path (see limaHomeFits).
 export const PREFIX = "spekter-";
+// The stopped clone source built by `sandbox image build`. Outside PREFIX, so it is never
+// listed as a box and reconciliation never adopts or deletes it.
+export const GOLDEN = "golden";
 // Lima's longest socket: <LIMA_HOME>/<instance>/ssh.sock.<16 digits>, under macOS's 104-byte cap.
 const UNIX_PATH_MAX = 104;
 const LONGEST_SOCKET_SUFFIX = "/ssh.sock.1234567890123456";
@@ -18,6 +21,10 @@ export function limaHomeFits(limaHome: string, maxIdLength: number): boolean {
 }
 const READY_ATTEMPTS = 5;
 const READY_RETRY_MS = 1000;
+const WORKSPACE_MOUNT_POINT = "/workspace";
+
+export type Spawn = (command: string, args: string[], options: SpawnOptions) => ChildProcess;
+export type Caps = { cpus: number; memoryGiB: number; diskGiB: number };
 
 export type LimaBackendOptions = {
   // Isolated Lima home, so sandbox instances never mix with the user's own Lima VMs.
@@ -25,55 +32,31 @@ export type LimaBackendOptions = {
   // Where per-box configs are written before `limactl create` (daemon-only directory).
   configDir: string;
   image: ImageRef;
-  caps: { cpus: number; memoryGiB: number; diskGiB: number };
-  spawn?: (command: string, args: string[], options: SpawnOptions) => ChildProcess;
+  caps: Caps;
+  spawn?: Spawn;
   env?: Env;
   sleep?: (ms: number) => Promise<void>;
   killGroup?: (pid: number, signal: NodeJS.Signals) => void;
 };
 
-type LimaInstance = { name?: string; status?: string; errors?: string[]; config?: { mounts?: { location?: string }[] } };
+type LimaInstance = {
+  name?: string;
+  status?: string;
+  errors?: string[];
+  config?: { mounts?: { location?: string; mountPoint?: string }[] };
+};
 
 const instanceName = (id: string) => `${PREFIX}${id}`;
 
 // limactl logs through logrus; the last msg="..." is the human-readable reason.
-function limaError(stderr: string): string {
+export function limaError(stderr: string): string {
   const messages = [...stderr.matchAll(/msg="((?:[^"\\]|\\.)*)"/g)].map((match) => match[1]);
   return messages.at(-1) ?? stderr.trim().split("\n").at(-1) ?? "unknown error";
 }
 
-// The command runs as its own process group so a kill takes its children with it; the group's
-// PID goes to a guest-local file. Nothing here touches /workspace, which the guest controls
-// from the host's point of view.
-const pidFile = (execId: string) => `/tmp/spekter-exec/${execId}.pid`;
-const wrapper = (execId: string) =>
-  `mkdir -p /tmp/spekter-exec && exec setsid -w sh -c 'echo $$ > ${pidFile(execId)} && exec sh -c "$1"' sandbox "$1"`;
-// No "--" before the negative PID: the guest's /bin/sh is dash, whose kill rejects it.
-const killScript = (execId: string) =>
-  `P=$(cat ${pidFile(execId)} 2>/dev/null) || exit 0; kill -TERM -$P 2>/dev/null; ` +
-  `for i in 1 2 3 4; do kill -0 -$P 2>/dev/null || break; sleep 0.5; done; ` +
-  `kill -KILL -$P 2>/dev/null; rm -f ${pidFile(execId)}; exit 0`;
-
-function killProcessGroup(pid: number, signal: NodeJS.Signals) {
-  try {
-    process.kill(-pid, signal);
-  } catch {
-    // Already gone.
-  }
-}
-
-export function createLimaBackend({
-  limaHome,
-  configDir,
-  image,
-  caps,
-  spawn = nodeSpawn,
-  env = process.env,
-  sleep = (ms) => delay(ms).then(() => {}),
-  killGroup = killProcessGroup,
-}: LimaBackendOptions): Backend {
-  // Only what limactl needs: the daemon's own environment carries SANDBOX_TOKEN and other
-  // secrets loaded from .env.local, and none of it may reach Lima or a guest.
+// The one way sandbox code runs limactl: argv only, never a shell, and only the environment
+// limactl needs — the daemon's own carries SANDBOX_TOKEN and other secrets from .env.local.
+export function limactlRunner({ limaHome, spawn = nodeSpawn, env = process.env }: { limaHome: string; spawn?: Spawn; env?: Env }) {
   const limaEnv: Partial<NodeJS.ProcessEnv> = { PATH: env.PATH, HOME: env.HOME, LIMA_HOME: limaHome };
 
   function limactl(args: string[], extra: SpawnOptions = {}): ChildProcess {
@@ -106,25 +89,74 @@ export function createLimaBackend({
       .map((line) => JSON.parse(line) as LimaInstance);
   }
 
-  // R28: the box only starts when Lima's effective config mounts exactly its workspace.
+  // Writes the generated config, creates the instance from it, and removes the file again.
+  async function createFromConfig(name: string, configDir: string, config: LimaConfigInput) {
+    await mkdir(configDir, { recursive: true });
+    const configPath = join(configDir, `${name}.yaml`);
+    await writeFile(configPath, JSON.stringify(limaConfig(config)));
+    try {
+      await runOrThrow(["create", `--name=${name}`, "--tty=false", configPath]);
+    } finally {
+      await rm(configPath, { force: true });
+    }
+  }
+
+  return { limactl, run, runOrThrow, listInstances, createFromConfig };
+}
+
+// The command runs as its own process group so a kill takes its children with it; the group's
+// PID goes to a guest-local file. Nothing here touches /workspace, which the guest controls
+// from the host's point of view.
+const pidFile = (execId: string) => `/tmp/spekter-exec/${execId}.pid`;
+const wrapper = (execId: string) =>
+  `mkdir -p /tmp/spekter-exec && exec setsid -w sh -c 'echo $$ > ${pidFile(execId)} && exec sh -c "$1"' sandbox "$1"`;
+// No "--" before the negative PID: the guest's /bin/sh is dash, whose kill rejects it.
+const killScript = (execId: string) =>
+  `P=$(cat ${pidFile(execId)} 2>/dev/null) || exit 0; kill -TERM -$P 2>/dev/null; ` +
+  `for i in 1 2 3 4; do kill -0 -$P 2>/dev/null || break; sleep 0.5; done; ` +
+  `kill -KILL -$P 2>/dev/null; rm -f ${pidFile(execId)}; exit 0`;
+
+function killProcessGroup(pid: number, signal: NodeJS.Signals) {
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    // Already gone.
+  }
+}
+
+export function createLimaBackend({
+  limaHome,
+  configDir,
+  image,
+  caps,
+  spawn = nodeSpawn,
+  env = process.env,
+  sleep = (ms) => delay(ms).then(() => {}),
+  killGroup = killProcessGroup,
+}: LimaBackendOptions): Backend {
+  const { limactl, run, runOrThrow, listInstances, createFromConfig } = limactlRunner({ limaHome, spawn, env });
+
+  // R28: the box only starts when Lima's effective config mounts exactly its workspace, at /workspace.
   async function assertMounts(id: string, workspaceDir: string) {
     const instance = (await listInstances()).find((entry) => entry.name === instanceName(id));
-    const locations = (instance?.config?.mounts ?? []).map((mount) => mount.location);
-    if (locations.length !== 1 || locations[0] !== workspaceDir) {
-      throw new Error(`Box ${id} has unexpected host mounts (${locations.join(", ") || "none"}); refusing to start it`);
+    const mounts = instance?.config?.mounts ?? [];
+    if (mounts.length !== 1 || mounts[0].location !== workspaceDir || mounts[0].mountPoint !== WORKSPACE_MOUNT_POINT) {
+      const found = mounts.map((mount) => `${mount.location} -> ${mount.mountPoint}`).join(", ") || "none";
+      throw new Error(`Box ${id} has unexpected host mounts (${found}); refusing to start it`);
     }
   }
 
   return {
     async create({ id, workspaceDir }) {
       const name = instanceName(id);
-      await mkdir(configDir, { recursive: true });
-      const configPath = join(configDir, `${id}.yaml`);
-      await writeFile(configPath, JSON.stringify(limaConfig({ workspaceDir, image, ...caps })));
-      try {
-        await runOrThrow(["create", `--name=${name}`, "--tty=false", configPath]);
-      } finally {
-        await rm(configPath, { force: true });
+      const golden = (await listInstances()).find((entry) => entry.name === GOLDEN);
+      if (golden?.status === "Stopped") {
+        // APFS clonefile copy of a provisioned disk: no image conversion, no package installs.
+        // The golden config mounts nothing; --set gives the clone its one workspace mount.
+        const mount = JSON.stringify([{ location: workspaceDir, mountPoint: WORKSPACE_MOUNT_POINT, writable: true }]);
+        await runOrThrow(["clone", GOLDEN, name, "--tty=false", "--set", `.mounts = ${mount}`]);
+      } else {
+        await createFromConfig(name, configDir, { workspaceDir, image, ...caps });
       }
       await assertMounts(id, workspaceDir);
       await runOrThrow(["start", "--tty=false", name]);

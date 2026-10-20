@@ -49,7 +49,7 @@ function spawn(command: string, args: readonly string[], options: SpawnOptions):
 }
 
 const listing = (...instances: object[]) => instances.map((instance) => JSON.stringify(instance)).join("\n");
-const mountsOf = (...locations: string[]) => ({ mounts: locations.map((location) => ({ location })) });
+const mountsOf = (...locations: string[]) => ({ mounts: locations.map((location) => ({ location, mountPoint: "/workspace" })) });
 
 function backend() {
   return createLimaBackend({
@@ -99,15 +99,53 @@ describe("Lima backend", () => {
 
     await backend().create({ id: "b1", workspaceDir: "/ws/b1" });
 
-    expect(calls.map(sub)).toEqual(["create", "list", "start", "shell"]);
-    expect(calls[0].args).toContain("--name=spekter-b1");
+    expect(calls.map(sub)).toEqual(["list", "create", "list", "start", "shell"]);
+    expect(calls[1].args).toContain("--name=spekter-b1");
     expect(config.mounts).toEqual([{ location: "/ws/b1", mountPoint: "/workspace", writable: true }]);
     expect(await readdir(configDir)).toEqual([]);
+  });
+
+  it("clones a stopped golden instance with exactly the box's workspace mount, instead of a cold create", async () => {
+    reply = (args) =>
+      args[0] === "list"
+        ? {
+            stdout: listing(
+              { name: "golden", status: "Stopped", config: { mounts: [] } },
+              { name: "spekter-b1", status: "Stopped", config: mountsOf("/ws/b1") },
+            ),
+          }
+        : {};
+
+    await backend().create({ id: "b1", workspaceDir: "/ws/b1" });
+
+    expect(calls.map(sub)).toEqual(["list", "clone", "list", "start", "shell"]);
+    const clone = calls[1].args;
+    expect(clone.slice(0, 3)).toEqual(["clone", "golden", "spekter-b1"]);
+    const set = clone[clone.indexOf("--set") + 1];
+    expect(set).toBe('.mounts = [{"location":"/ws/b1","mountPoint":"/workspace","writable":true}]');
+  });
+
+  it("falls back to a cold create when there is no stopped golden instance", async () => {
+    reply = (args) =>
+      args[0] === "list"
+        ? { stdout: listing({ name: "golden", status: "Running" }, { name: "spekter-b1", status: "Stopped", config: mountsOf("/ws/b1") }) }
+        : {};
+
+    await backend().create({ id: "b1", workspaceDir: "/ws/b1" });
+
+    expect(calls.map(sub)).toEqual(["list", "create", "list", "start", "shell"]);
+  });
+
+  it("never reports the golden instance as a box, so reconciliation leaves it alone", async () => {
+    reply = () => ({ stdout: listing({ name: "golden", status: "Stopped" }, { name: "spekter-a", status: "Running" }) });
+
+    expect(await backend().list()).toEqual([{ id: "a", status: "running" }]);
   });
 
   it.each([
     ["an extra home-folder mount", mountsOf("/ws/b1", "/Users/f")],
     ["a missing workspace mount", mountsOf()],
+    ["the workspace at the wrong guest path", { mounts: [{ location: "/ws/b1", mountPoint: "/ws/b1" }] }],
   ])("refuses to start a box whose effective config has %s", async (_label, config) => {
     reply = (args) => (args[0] === "list" ? { stdout: listing({ name: "spekter-b1", status: "Stopped", config }) } : {});
 

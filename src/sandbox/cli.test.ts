@@ -127,6 +127,28 @@ describe("sandbox CLI", () => {
     expect(sent).toEqual([]);
   });
 
+  it("image build runs the golden-image build locally with the daemon's config, not over HTTP", async () => {
+    const builds: unknown[] = [];
+    const code = await runCli(["image", "build"], {
+      env: { SANDBOX_TOKEN: token, SANDBOX_LIMA_HOME: "/tmp/lh", SANDBOX_CPUS: "3" },
+      stdout: (text) => (out += text),
+      stderr: (text) => (err += text),
+      buildImage: async (options) => {
+        builds.push(options);
+        options.progress("step one");
+      },
+    });
+
+    expect(code).toBe(0);
+    expect(builds).toEqual([expect.objectContaining({ limaHome: "/tmp/lh", caps: expect.objectContaining({ cpus: 3 }) })]);
+    expect(out).toContain("step one");
+    expect(sent).toEqual([]);
+  });
+
+  it("image without build is a usage error", async () => {
+    expect(await cli("image")).toBe(2);
+  });
+
   it("refuses to run without SANDBOX_TOKEN", async () => {
     const code = await runCli(["list"], { env: {}, stdout: () => {}, stderr: (text) => (err += text) });
 
