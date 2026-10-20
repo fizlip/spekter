@@ -109,13 +109,13 @@ describe("box lifecycle", () => {
     expect(fake.calls).toEqual([]);
   });
 
-  it("rejects creates beyond the concurrent-box cap", async () => {
+  it("rejects creates beyond the concurrent-box cap, naming the live boxes so a caller can reuse or destroy one", async () => {
     const boxes = registry({ maxBoxes: 2 });
-    await boxes.create({});
-    await boxes.create({});
+    await boxes.create({ name: "a" });
+    await boxes.create({ name: "b" });
 
     await expect(boxes.create({})).rejects.toThrow(
-      new SandboxError("conflict", "Box limit reached (2 live boxes); destroy one first"),
+      new SandboxError("conflict", "Box limit reached (2 live boxes: a, b). Reuse one of them, or destroy one first"),
     );
   });
 

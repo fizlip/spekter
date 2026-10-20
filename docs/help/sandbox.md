@@ -59,8 +59,9 @@ What a box can and cannot do:
 
 Limits (all optional, in `.env.local`): `SANDBOX_MAX_BOXES` (2),
 `SANDBOX_TTL_SECONDS` idle time before a box is reaped (1800),
-`SANDBOX_CPUS` / `SANDBOX_MEMORY_GIB` / `SANDBOX_DISK_GIB` (2 / 4 / 20; the
-golden image's sizes carry over to clones, so rebuild after changing them),
+`SANDBOX_CPUS` / `SANDBOX_MEMORY_GIB` / `SANDBOX_DISK_GIB` (2 / 4 / 20; CPU
+and memory apply to every new box, but clones keep the golden image's disk
+size, so rebuild after changing the disk),
 `SANDBOX_PORT` (3210). Events go to `logs/sandboxd.jsonl`; `box.ready` records
 each boot time.
 

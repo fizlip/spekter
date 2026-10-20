@@ -68,7 +68,7 @@ export const sandboxExecTool: SpekterTool<typeof inputSchema, ExecToolResult> = 
   name: "sandbox_exec",
   description: [
     "Run a shell command in a sandbox box: a disposable Linux VM (Ubuntu, arm64) where you can install packages, clone repos, build, and run code without touching the user's machine. The box has internet access and you have sudo.",
-    "Omit `box` to create a new box; the result's `box` id lets later calls (and later turns) reuse it, and installed packages and files persist in it until it is destroyed or reaped after sitting idle. If a box id is no longer known, omit `box` to start over.",
+    "Omit `box` to create a new box; the result's `box` id lets later calls (and later turns) reuse it, and installed packages and files persist in it until it is destroyed or reaped after sitting idle. If a box id is no longer known, omit `box` to start over. Only a few boxes can exist at once: if creating fails because the limit is reached, reuse one of the live boxes the error names, or destroy one you no longer need.",
     "Each call is one blocking command with a timeout; for a server or other long-running process, start it in the background (`nohup cmd > log 2>&1 &`) and check on it in later calls.",
     "/workspace inside the box is the folder `workspaceDir` on the host and survives the box: save artifacts there, and read them with read_file using that absolute path.",
     "Call sandbox_destroy when you are done with a box.",

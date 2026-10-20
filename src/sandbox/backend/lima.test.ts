@@ -123,6 +123,8 @@ describe("Lima backend", () => {
     expect(clone.slice(0, 3)).toEqual(["clone", "golden", "spekter-b1"]);
     const set = clone[clone.indexOf("--set") + 1];
     expect(set).toBe('.mounts = [{"location":"/ws/b1","mountPoint":"/workspace","writable":true}]');
+    // The configured size applies, not whatever the golden image was built with.
+    expect(clone).toEqual(expect.arrayContaining(["--cpus=2", "--memory=4"]));
   });
 
   it("falls back to a cold create when there is no stopped golden instance", async () => {

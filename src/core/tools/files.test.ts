@@ -90,6 +90,21 @@ describe("list_files", () => {
     expect(result.files).toHaveLength(MAX_LISTED_FILES);
     expect(result.truncated).toBe(true);
   });
+
+  it("keeps the project folders when a workspace floods the listing, and stops walking at the cap", async () => {
+    await writeFile(join(workDir, "knowledge", "b.md"), "");
+    const box = join(homeDir, "spekter-workspace", "b1");
+    for (const dir of ["one", "two"]) {
+      await mkdir(join(box, dir), { recursive: true });
+      await Promise.all(Array.from({ length: MAX_LISTED_FILES }, (_, i) => writeFile(join(box, dir, `f${i}`), "")));
+    }
+
+    const { files } = await listFilesTool.execute({}, {});
+
+    expect(files).toContain("knowledge/b.md");
+    // One workspace folder already fills the cap; the second is never read.
+    expect(files.filter((file) => file.includes(`${join("b1", "two")}/`))).toEqual([]);
+  });
 });
 
 describe("sandbox workspace scope", () => {

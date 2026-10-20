@@ -104,7 +104,10 @@ export function createBoxRegistry({ backend, stateDir, workspaceRoot, maxBoxes, 
       const id = name === undefined ? randomBytes(4).toString("hex") : assertBoxId(name);
       if (boxes.has(id)) throw new SandboxError("conflict", `A box named "${id}" already exists`);
       if (boxes.size >= maxBoxes) {
-        throw new SandboxError("conflict", `Box limit reached (${maxBoxes} live boxes); destroy one first`);
+        throw new SandboxError(
+          "conflict",
+          `Box limit reached (${maxBoxes} live boxes: ${[...boxes.keys()].join(", ")}). Reuse one of them, or destroy one first`,
+        );
       }
 
       const createdAt = now();

@@ -101,6 +101,15 @@ describe("sandbox_exec", () => {
     );
   });
 
+  it("passes the box-limit error through with the live ids, so the agent can reuse or destroy one", async () => {
+    respond = () => ({
+      status: 409,
+      body: { error: { code: "conflict", message: "Box limit reached (2 live boxes: a, b). Reuse one of them, or destroy one first" } },
+    });
+
+    await expect(sandboxExecTool.execute({ cmd: "ls" }, {})).rejects.toThrow("live boxes: a, b");
+  });
+
   it("explains how to start the daemon when it is unreachable", async () => {
     respond = () => Promise.reject(new TypeError("fetch failed"));
 

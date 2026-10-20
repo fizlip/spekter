@@ -154,7 +154,17 @@ export function createLimaBackend({
         // APFS clonefile copy of a provisioned disk: no image conversion, no package installs.
         // The golden config mounts nothing; --set gives the clone its one workspace mount.
         const mount = JSON.stringify([{ location: workspaceDir, mountPoint: WORKSPACE_MOUNT_POINT, writable: true }]);
-        await runOrThrow(["clone", GOLDEN, name, "--tty=false", "--set", `.mounts = ${mount}`]);
+        // CPU and memory follow the current config; the disk cannot shrink below the golden's.
+        await runOrThrow([
+          "clone",
+          GOLDEN,
+          name,
+          "--tty=false",
+          `--cpus=${caps.cpus}`,
+          `--memory=${caps.memoryGiB}`,
+          "--set",
+          `.mounts = ${mount}`,
+        ]);
       } else {
         await createFromConfig(name, configDir, { workspaceDir, image, ...caps });
       }

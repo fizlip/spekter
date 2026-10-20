@@ -14,20 +14,18 @@ const inputSchema = z.object({
     .describe("Folder to list, e.g. 'skills'. Omit to list every allowed folder."),
 });
 
+// Collects into `files` until it holds one more than the cap (enough to know the listing is
+// truncated), then stops reading: a workspace can hold far more files than will ever be shown.
 // Hidden files stay invisible, matching the knowledge folder's convention.
-async function walk(dir: string): Promise<string[]> {
+async function walk(dir: string, files: string[]): Promise<void> {
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
-  const files = await Promise.all(
-    entries
-      .filter((entry) => !entry.name.startsWith("."))
-      .map(async (entry) => {
-        const full = join(dir, entry.name);
-        if (entry.isDirectory()) return walk(full);
-        if (entry.isFile()) return [full];
-        return [];
-      }),
-  );
-  return files.flat();
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (files.length > MAX_LISTED_FILES) return;
+    if (entry.name.startsWith(".")) continue;
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) await walk(full, files);
+    else if (entry.isFile()) files.push(full);
+  }
 }
 
 export const listFilesTool: SpekterTool<typeof inputSchema, { files: string[]; truncated?: true }> = {
@@ -41,7 +39,11 @@ export const listFilesTool: SpekterTool<typeof inputSchema, { files: string[]; t
     const roots = path ? [resolveToolPath(path)] : fileToolRoots();
     const base = resolve();
     const display = (file: string) => (file.startsWith(base + sep) ? relative(base, file) : file);
-    const files = (await Promise.all(roots.map(walk))).flat().map(display).sort();
-    return files.length > MAX_LISTED_FILES ? { files: files.slice(0, MAX_LISTED_FILES), truncated: true } : { files };
+    // Roots in order (skills, knowledge, then workspaces), so a flooded workspace cannot crowd
+    // out the project folders; the cut happens in walk order, before sorting for display.
+    const found: string[] = [];
+    for (const root of roots) await walk(root, found);
+    const files = found.slice(0, MAX_LISTED_FILES).map(display).sort();
+    return found.length > MAX_LISTED_FILES ? { files, truncated: true } : { files };
   },
 };
