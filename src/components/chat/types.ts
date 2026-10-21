@@ -12,5 +12,5 @@ export type ChatMessage = {
   sources?: Source[];
   // Set on a tool message: one tool call the model made for the reply. `path` is
   // set when the call's input names a file (the file tools), for display.
-  tool?: { id: string; name: string; state: "running" | "succeeded" | "failed"; path?: string };
+  tool?: { id: string; name: string; state: "running" | "succeeded" | "failed"; path?: string; cmd?: string };
 };

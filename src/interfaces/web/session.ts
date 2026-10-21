@@ -24,6 +24,7 @@ const chatMessageSchema = z.object({
       name: z.string(),
       state: z.enum(["running", "succeeded", "failed"]),
       path: z.string().optional(),
+      cmd: z.string().optional(),
     })
     .optional(),
 });

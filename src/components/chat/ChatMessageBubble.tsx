@@ -151,9 +151,9 @@ const TOOL_VERBS: Record<string, { doing: string; done: string }> = {
 
 export function ToolMessage({ message }: { message: ChatMessage }) {
   if (!message.tool) return null;
-  const { name, state, path } = message.tool;
+  const { name, state, path, cmd } = message.tool;
   const verbs = TOOL_VERBS[name];
-  const subject = path ?? name;
+  const subject = path ?? cmd ?? name;
 
   return (
     <article
@@ -165,15 +165,17 @@ export function ToolMessage({ message }: { message: ChatMessage }) {
           className={`flex items-center gap-1.5 text-sm font-medium tracking-wide ${state === "failed" ? "text-red-700" : "text-black"}`}
         >
           <Wrench size={14} className="shrink-0" />
-          {state === "running" ? (
-            <span className="text-flare">
-              {verbs ? `${verbs.doing} ${subject}` : `Calling ${name}`}
-            </span>
-          ) : state === "succeeded" ? (
-            verbs ? `${verbs.done} ${subject}` : `Used ${name}`
-          ) : (
-            `${name} failed`
-          )}
+          <span className="min-w-0 truncate" title={cmd ?? path}>
+            {state === "running" ? (
+              <span className="text-flare">
+                {verbs ? `${verbs.doing} ${subject}` : `Calling ${name}`}
+              </span>
+            ) : state === "succeeded" ? (
+              verbs ? `${verbs.done} ${subject}` : `Used ${name}`
+            ) : (
+              `${name} failed`
+            )}
+          </span>
         </p>
       </div>
     </article>

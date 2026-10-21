@@ -180,13 +180,19 @@ export function ChatInterface({
             input && typeof input === "object" && "path" in input && typeof input.path === "string"
               ? input.path
               : undefined;
+          // Sandbox-style tools name their command `cmd`; show it the way file
+          // tools show their path.
+          const cmd =
+            input && typeof input === "object" && "cmd" in input && typeof input.cmd === "string"
+              ? input.cmd
+              : undefined;
           setMessages((current) =>
             insertBeforeReply(current, {
               id: `tool-${id}`,
               role: "tool",
               content: "",
               createdAt: new Date().toISOString(),
-              tool: { id, name, state: "running", ...(path ? { path } : {}) },
+              tool: { id, name, state: "running", ...(path ? { path } : {}), ...(cmd ? { cmd } : {}) },
             }),
           );
         },
