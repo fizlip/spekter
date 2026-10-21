@@ -36,7 +36,9 @@ export function SessionList() {
   }, [open, chatId, sessionsVersion]);
 
   return (
-    <SidebarGroup>
+    // pt-0 keeps it flush with the group above — SidebarGroup's own p-2 would
+    // otherwise stack on top of the workspace group's bottom padding.
+    <SidebarGroup className="pt-0">
       <SidebarMenu>
         <SidebarMenuItem>
           <SidebarMenuButton
