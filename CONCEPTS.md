@@ -33,3 +33,16 @@ A tool that returned a result for a reply is listed among that reply's sources.
 ### Source
 Something external that went into a reply, such as a knowledge note given to the model or a tool that returned a result; every successful reply lists its sources.
 Each source names its kind, so new knowledge Bricks and tools add new kinds rather than new response fields.
+
+### Sandbox
+A disposable Linux environment the agent can run commands in, created and destroyed by the sandbox service; nothing inside it persists except what lands in its workspace.
+
+### Sandbox service
+A standalone local service (the `sandboxd` daemon plus the `sandbox` CLI) that owns sandbox lifecycle over localhost HTTP; Spekter's agent reaches it through a thin Tool, and its substrate sits behind a swappable backend interface.
+
+### Workspace
+The per-sandbox host directory mounted into the guest; the only state that survives a sandbox's destruction.
+
+### Session
+A stored web-chat conversation, kept as one JSON file under `sessions/` holding the full transcript — messages, reasoning, tool calls, and sources.
+A Session belongs to the web Interface, not the Core: the Core stays stateless, and reopening a Session feeds only its replayable `{role, content}` turns back as an ordinary request.
