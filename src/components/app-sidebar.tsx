@@ -1,14 +1,11 @@
 "use client"
 
-import { useState } from "react"
 import {
   Logs,
   MousePointer2,
-  MessageCircle,
   ClockFading,
   ShieldCheck,
   File,
-  Triangle,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -24,7 +21,6 @@ import { SessionList } from "@/components/session-list"
 import { WorkspaceTree } from "@/components/workspace-tree"
 
 export function AppSidebar() {
-  const [sessionsOpen, setSessionsOpen] = useState(false)
 
   return (
     <Sidebar collapsible="none" className="bg-transparent">
@@ -38,17 +34,6 @@ export function AppSidebar() {
             >
               <MousePointer2 size={12} /> Agent
             </SidebarMenuButton>
-            <SidebarMenuButton
-              onClick={() => setSessionsOpen((value) => !value)}
-              className="font-inter hover:bg-[#e1e1e2] cursor-pointer text-sm hover:text-black text-gray-500"
-            >
-              <MessageCircle  size={12}/> Sessions
-              <Triangle
-                fill="currentColor"
-                className={`ml-auto size-2! text-gray-500 transition-transform ${sessionsOpen ? "rotate-180" : "rotate-90"}`}
-              />
-            </SidebarMenuButton>
-            {sessionsOpen && <SessionList />}
             <SidebarMenuButton
               render={<Link href="/files" />}
               className="font-inter hover:bg-[#e1e1e2] cursor-pointer text-sm hover:text-black text-gray-500"
@@ -78,6 +63,7 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <WorkspaceTree />
+        <SessionList />
       </SidebarContent>
     </Sidebar>
   )
