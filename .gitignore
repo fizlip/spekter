@@ -44,6 +44,9 @@ next-env.d.ts
 # request log (SPE-3)
 /logs
 
+# saved chat sessions
+/sessions/
+
 # sandboxd state: isolated Lima home, box state files
 /.sandbox/
 
