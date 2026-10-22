@@ -15,6 +15,9 @@ const chatRequestSchema = z.object({
     }),
   // Per-request model pick from the composer; a slash-command override wins over it.
   model: z.string().min(1).optional(),
+  // Continues a session's stored model transcript (tool calls and results included);
+  // absent means a stateless call rebuilt from the posted messages alone.
+  sessionId: z.string().min(1).optional(),
 });
 
 export type ChatMessage = z.infer<typeof chatMessageSchema>;

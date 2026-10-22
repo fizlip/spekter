@@ -1,11 +1,11 @@
+import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import { ProviderError } from "../errors";
 import { failingModel, replyingModel, scriptedModel, toolCallContent } from "../testing/mock-model";
 import { currentTime } from "../tools/current-time";
 import { assembleChatCall, completeChat } from "./complete";
-import type { ChatMessage } from "./contract";
 
-const conversation: ChatMessage[] = [
+const conversation: ModelMessage[] = [
   { role: "user", content: "My name is Filip." },
   { role: "assistant", content: "Nice to meet you, Filip." },
   { role: "user", content: "What is my name?" },
@@ -30,6 +30,7 @@ describe("completeChat", () => {
     await expect(completeChat(conversation, replyingModel("Your name is Filip."))).resolves.toEqual({
       text: "Your name is Filip.",
       sources: [],
+      produced: expect.any(Array),
     });
   });
 
@@ -63,6 +64,7 @@ describe("completeChat", () => {
         { type: "knowledge_file", path: "people/filip.md" },
         { type: "knowledge_file", path: "projects/apollo.md" },
       ],
+      produced: expect.any(Array),
     });
   });
 
@@ -93,8 +95,8 @@ describe("completeChat", () => {
   });
 
   it("derives the reasoning effort from the last caller message, not the system prompt", () => {
-    const short = [{ role: "user", content: "Hi" }] satisfies ChatMessage[];
-    const long = [{ role: "user", content: "Please think carefully about this question" }] satisfies ChatMessage[];
+    const short = [{ role: "user", content: "Hi" }] satisfies ModelMessage[];
+    const long = [{ role: "user", content: "Please think carefully about this question" }] satisfies ModelMessage[];
 
     const withLongPrompt = assembleChatCall(short, replyingModel("ok"), {
       systemPrompt: "# A long system prompt full of words",
@@ -167,7 +169,7 @@ describe("completeChat", () => {
 });
 
 describe("completeChat with tools", () => {
-  const question: ChatMessage[] = [{ role: "user", content: "What is today's date?" }];
+  const question: ModelMessage[] = [{ role: "user", content: "What is today's date?" }];
 
   it("answers from the tool and lists it as a source after the knowledge notes", async () => {
     const model = scriptedModel([
@@ -182,6 +184,7 @@ describe("completeChat with tools", () => {
         { type: "knowledge_file", path: "projects/apollo.md" },
         { type: "tool", name: "current_time" },
       ],
+      produced: expect.any(Array),
     });
   });
 
@@ -206,6 +209,7 @@ describe("completeChat with tools", () => {
     await expect(completeChat(question, model, { tools: [currentTime], maxSteps: 5 })).resolves.toEqual({
       text: "I can't check the weather.",
       sources: [],
+      produced: expect.any(Array),
     });
   });
 

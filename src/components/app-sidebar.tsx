@@ -1,28 +1,24 @@
 "use client"
 
-import { 
-  HomeIcon, 
-  Logs, 
-  MousePointer2, 
-  MessageCircle, 
-  ClockFading, 
+import {
+  Logs,
+  MousePointer2,
+  ClockFading,
   ShieldCheck,
   File,
-  Zap,
 } from "lucide-react"
 import Link from "next/link"
 
 import {
   Sidebar,
   SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-const navItems = [{ title: "Home", href: "/", icon: HomeIcon }]
+import { SessionList } from "@/components/session-list"
+import { WorkspaceTree } from "@/components/workspace-tree"
 
 export function AppSidebar() {
 
@@ -37,12 +33,6 @@ export function AppSidebar() {
               className="font-inter hover:bg-[#e1e1e2] cursor-pointer text-sm hover:text-black text-gray-500"
             >
               <MousePointer2 size={12} /> Agent
-            </SidebarMenuButton>
-            <SidebarMenuButton
-              render={<Link href="/" />}
-              className="font-inter hover:bg-[#e1e1e2] cursor-pointer text-sm hover:text-black text-gray-500"
-            >
-              <MessageCircle  size={12}/> Sessions
             </SidebarMenuButton>
             <SidebarMenuButton
               render={<Link href="/files" />}
@@ -72,16 +62,8 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <WorkspaceTree />
+        <SessionList />
       </SidebarContent>
     </Sidebar>
   )

@@ -12,7 +12,7 @@ export const deleteFileTool: SpekterTool<typeof inputSchema, { path: string; del
   description: "Delete a file. Only files inside the allowed folders can be deleted; folders are refused.",
   inputSchema,
   execute: async ({ path }) => {
-    const file = resolveScopedPath(path);
+    const file = await resolveScopedPath(path);
     const info = await stat(file).catch(() => {
       throw new Error(`Cannot delete file: ${path}`);
     });

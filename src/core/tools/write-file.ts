@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { z } from "zod";
-import { resolveScopedPath } from "./scoped-path";
+import { resolveScopedPath, statIfExists } from "./scoped-path";
 import type { SpekterTool } from "./types";
 
 const inputSchema = z.object({
@@ -16,7 +16,9 @@ export const writeFileTool: SpekterTool<typeof inputSchema, { path: string; byte
     "Create or fully overwrite a file. Only files inside the allowed folders can be written; parent folders are created as needed.",
   inputSchema,
   execute: async ({ path, content }) => {
-    const file = resolveScopedPath(path);
+    const file = await resolveScopedPath(path);
+    const existing = await statIfExists(file);
+    if (existing && !existing.isFile()) throw new Error(`Not a file: ${path}`);
     await mkdir(dirname(file), { recursive: true });
     await writeFile(file, content, "utf-8");
     return { path, bytes: Buffer.byteLength(content) };

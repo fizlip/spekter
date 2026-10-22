@@ -1,0 +1,101 @@
+import { homedir } from "node:os";
+import { join, resolve, sep } from "node:path";
+import { limaHomeFits } from "./backend/lima";
+import { MAX_BOX_ID_LENGTH } from "./boxes";
+import { SandboxError } from "./wire";
+
+export type Env = Record<string, string | undefined>;
+
+export type SandboxConfig = {
+  port: number;
+  token: string;
+  logPath: string;
+  // Daemon-written state only (box state files, configs); never mounted into a guest.
+  sandboxDir: string;
+  // Lima's own home, outside the repo because its socket paths must stay under 104 characters.
+  limaHome: string;
+  // Parent of every box's host workspace — guest-writable, so it must live outside the project.
+  workspaceRoot: string;
+  maxBoxes: number;
+  ttlSeconds: number;
+  // Default and ceiling for one command's run time. The default sits below Spekter's tool
+  // budget, so a long command comes back as a timed-out result with output, not a dropped call.
+  execDefaultSeconds: number;
+  execMaxSeconds: number;
+  // Per-box VM size. The disk cap bounds the guest's own disk only; workspace writes land on the host.
+  caps: { cpus: number; memoryGiB: number; diskGiB: number };
+};
+
+export const DEFAULT_PORT = 3210;
+const DEFAULT_LOG_PATH = "logs/sandboxd.jsonl";
+const DEFAULT_WORKSPACE_ROOT = "~/spekter-workspace";
+const DEFAULT_LIMA_HOME = "~/.spekter-sandbox/lima";
+const MIN_TOKEN_LENGTH = 32;
+
+// Node's path functions treat "~" literally; expand it the way a shell would.
+export function expandHome(path: string): string {
+  return path === "~" || path.startsWith("~/") ? join(homedir(), path.slice(1)) : resolve(path);
+}
+
+function readLimaHome(env: Env): string {
+  const limaHome = expandHome(env.SANDBOX_LIMA_HOME?.trim() || DEFAULT_LIMA_HOME);
+  if (!limaHomeFits(limaHome, MAX_BOX_ID_LENGTH)) {
+    throw new SandboxError(
+      "not_configured",
+      `SANDBOX_LIMA_HOME is too long (${limaHome}): Lima's socket paths under it would exceed macOS's 104-character limit`,
+    );
+  }
+  return limaHome;
+}
+
+export function readWorkspaceRoot(env: Env): string {
+  const root = expandHome(env.SANDBOX_WORKSPACE_ROOT?.trim() || DEFAULT_WORKSPACE_ROOT);
+  const project = resolve();
+  if (root === project || root.startsWith(project + sep)) {
+    throw new SandboxError("not_configured", `SANDBOX_WORKSPACE_ROOT must be outside the project (${project})`);
+  }
+  return root;
+}
+
+// An optional positive-whole-number env var; a bad value is a configuration error, never ignored.
+export function readPositiveIntEnv(env: Env, name: string, fallback: number): number {
+  const value = env[name]?.trim();
+  if (!value) return fallback;
+  if (!/^\d+$/.test(value) || Number(value) < 1) {
+    throw new SandboxError("not_configured", `${name} must be a positive whole number, got "${value}"`);
+  }
+  return Number(value);
+}
+
+// The shared secret that tells host callers apart from guests forging local headers.
+export function readToken(env: Env): string {
+  const token = env.SANDBOX_TOKEN?.trim();
+  if (!token) throw new SandboxError("not_configured", "Missing environment variable: SANDBOX_TOKEN");
+  if (token.length < MIN_TOKEN_LENGTH) {
+    throw new SandboxError(
+      "not_configured",
+      `SANDBOX_TOKEN must be at least ${MIN_TOKEN_LENGTH} characters; generate one with \`openssl rand -hex 32\``,
+    );
+  }
+  return token;
+}
+
+export function readSandboxConfig(env: Env = process.env): SandboxConfig {
+  return {
+    port: readPositiveIntEnv(env, "SANDBOX_PORT", DEFAULT_PORT),
+    token: readToken(env),
+    logPath: resolve(env.SANDBOX_LOG?.trim() || DEFAULT_LOG_PATH),
+    sandboxDir: resolve(".sandbox"),
+    limaHome: readLimaHome(env),
+    workspaceRoot: readWorkspaceRoot(env),
+    maxBoxes: readPositiveIntEnv(env, "SANDBOX_MAX_BOXES", 2),
+    ttlSeconds: readPositiveIntEnv(env, "SANDBOX_TTL_SECONDS", 1800),
+    execDefaultSeconds: readPositiveIntEnv(env, "SANDBOX_EXEC_SECONDS", 90),
+    execMaxSeconds: readPositiveIntEnv(env, "SANDBOX_EXEC_MAX_SECONDS", 600),
+    caps: {
+      cpus: readPositiveIntEnv(env, "SANDBOX_CPUS", 2),
+      memoryGiB: readPositiveIntEnv(env, "SANDBOX_MEMORY_GIB", 4),
+      diskGiB: readPositiveIntEnv(env, "SANDBOX_DISK_GIB", 20),
+    },
+  };
+}

@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { z } from "zod";
-import { resolveScopedPath } from "./scoped-path";
+import { resolveScopedPath, statIfExists } from "./scoped-path";
 import type { SpekterTool } from "./types";
 
 const inputSchema = z.object({
@@ -20,7 +20,9 @@ export const editFileTool: SpekterTool<typeof inputSchema, { path: string }> = {
     "Replace a piece of an existing file. old_string must match exactly once — include enough surrounding text to make it unique.",
   inputSchema,
   execute: async ({ path, old_string, new_string }) => {
-    const file = resolveScopedPath(path);
+    const file = await resolveScopedPath(path);
+    const info = await statIfExists(file);
+    if (info && !info.isFile()) throw new Error(`Not a file: ${path}`);
     let content: string;
     try {
       content = await readFile(file, "utf-8");

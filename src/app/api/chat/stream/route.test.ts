@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LanguageModel } from "ai";
@@ -8,8 +8,10 @@ import {
   failingModel,
   finishPart,
   hangingModel,
+  scriptedStreamingModel,
   streamingModel,
   textParts,
+  toolCallParts,
 } from "@/core/testing/mock-model";
 import { waitForLogEntries, withTempRequestLog } from "@/core/testing/request-log";
 import { POST } from "./route";
@@ -97,10 +99,14 @@ describe("POST /api/chat/stream", () => {
     expect(model.doStreamCalls[0].tools?.map((tool) => tool.name)).toEqual([
       "current_time",
       "list_files",
+      "list_skills",
+      "skill_metadata",
       "read_file",
       "write_file",
       "edit_file",
       "delete_file",
+      "sandbox_exec",
+      "sandbox_destroy",
     ]);
   });
 
@@ -314,5 +320,53 @@ describe("POST /api/chat/stream request log", () => {
     await POST(streamRequest("not json"));
 
     expect(await onlyEntry()).toMatchObject({ outcome: "error", errorCode: "invalid_request" });
+  });
+});
+
+describe("POST /api/chat/stream model history", () => {
+  let historyDir: string;
+
+  beforeEach(async () => {
+    historyDir = await mkdtemp(join(tmpdir(), "spekter-model-history-"));
+    vi.stubEnv("SPEKTER_MODEL_HISTORY_DIR", historyDir);
+  });
+
+  afterEach(async () => {
+    await rm(historyDir, { recursive: true, force: true });
+  });
+
+  it("carries prior tool calls and results into the next turn of a session", async () => {
+    const model = scriptedStreamingModel([
+      toolCallParts("current_time"),
+      [...textParts(["It is Monday."]), finishPart()],
+    ]);
+    stubOpenRouterModel(model);
+
+    await readFrames(await POST(streamRequest({ messages: [{ role: "user", content: "what day is it?" }], sessionId: "s1" })));
+    await readFrames(
+      await POST(
+        streamRequest({
+          messages: [
+            { role: "user", content: "what day is it?" },
+            { role: "assistant", content: "It is Monday." },
+            { role: "user", content: "and tomorrow?" },
+          ],
+          sessionId: "s1",
+        }),
+      ),
+    );
+
+    // The second turn's prompt rebuilds from the stored transcript: tool result included.
+    const prompt = JSON.stringify(model.doStreamCalls.at(-1)?.prompt);
+    expect(prompt).toContain('"tool-result"');
+    expect(prompt).toContain("call-current_time");
+  });
+
+  it("writes no history when the reply fails", async () => {
+    stubOpenRouterModel(streamingModel([{ type: "error", error: new Error("upstream exploded") }]));
+
+    await readFrames(await POST(streamRequest({ messages: [{ role: "user", content: "hi" }], sessionId: "s1" })));
+
+    await expect(readFile(join(historyDir, "s1.json"), "utf-8")).rejects.toThrow();
   });
 });

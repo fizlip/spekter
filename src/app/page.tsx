@@ -1,5 +1,4 @@
 import { ActiveChat } from "@/components/chat/chat-session";
-import { createInitialMessages } from "@/components/chat/chat-data";
 import { readConfiguredModel } from "@/core/config";
 
 export default function Home() {
@@ -7,7 +6,7 @@ export default function Home() {
 
   return (
     <ActiveChat
-      initialMessages={createInitialMessages(now)}
+      initialMessages={[]}
       todayKey={now.toISOString().slice(0, 10)}
       model={readConfiguredModel()}
     />

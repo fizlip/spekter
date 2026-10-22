@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { LanguageModel } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createOpenRouterModel } from "@/core/models/openrouter";
-import { failingModel, replyingModel } from "@/core/testing/mock-model";
+import { failingModel, replyingModel, scriptedModel, toolCallContent } from "@/core/testing/mock-model";
 import { waitForLogEntries, withTempRequestLog } from "@/core/testing/request-log";
 import { POST } from "./route";
 
@@ -86,10 +86,14 @@ describe("POST /api/chat", () => {
     expect(model.doGenerateCalls[0].tools?.map((tool) => tool.name)).toEqual([
       "current_time",
       "list_files",
+      "list_skills",
+      "skill_metadata",
       "read_file",
       "write_file",
       "edit_file",
       "delete_file",
+      "sandbox_exec",
+      "sandbox_destroy",
     ]);
   });
 
@@ -332,5 +336,73 @@ describe("POST /api/chat request log", () => {
     expect(response.status).toBe(200);
     expect((await response.json()).message.content).toBe("Your name is Filip.");
     await vi.waitFor(() => expect(console.error).toHaveBeenCalledOnce());
+  });
+});
+
+describe("POST /api/chat model history", () => {
+  let historyDir: string;
+
+  beforeEach(async () => {
+    historyDir = await mkdtemp(join(tmpdir(), "spekter-model-history-"));
+    vi.stubEnv("SPEKTER_MODEL_HISTORY_DIR", historyDir);
+  });
+
+  afterEach(async () => {
+    await rm(historyDir, { recursive: true, force: true });
+  });
+
+  it("carries prior tool calls and results into the next turn of a session", async () => {
+    const model = scriptedModel([
+      { content: [toolCallContent("current_time")], finishReason: "tool-calls" },
+      { content: [{ type: "text", text: "It is Monday." }] },
+    ]);
+    stubOpenRouterModel(model);
+
+    await POST(chatRequest({ messages: [{ role: "user", content: "what day is it?" }], sessionId: "s1" }));
+    await POST(
+      chatRequest({
+        messages: [
+          { role: "user", content: "what day is it?" },
+          { role: "assistant", content: "It is Monday." },
+          { role: "user", content: "and tomorrow?" },
+        ],
+        sessionId: "s1",
+      }),
+    );
+
+    // The second turn's prompt rebuilds from the stored transcript: tool result included.
+    const prompt = JSON.stringify(model.doGenerateCalls.at(-1)?.prompt);
+    expect(prompt).toContain('"tool-result"');
+    expect(prompt).toContain("call-current_time");
+  });
+
+  it("stays display-only without a session id", async () => {
+    const model = scriptedModel([
+      { content: [toolCallContent("current_time")], finishReason: "tool-calls" },
+      { content: [{ type: "text", text: "It is Monday." }] },
+    ]);
+    stubOpenRouterModel(model);
+
+    await POST(chatRequest({ messages: [{ role: "user", content: "what day is it?" }] }));
+    await POST(
+      chatRequest({
+        messages: [
+          { role: "user", content: "what day is it?" },
+          { role: "assistant", content: "It is Monday." },
+          { role: "user", content: "and tomorrow?" },
+        ],
+      }),
+    );
+
+    expect(JSON.stringify(model.doGenerateCalls.at(-1)?.prompt)).not.toContain("tool-result");
+  });
+
+  it("rejects a session id that is not filename-safe", async () => {
+    const response = await POST(
+      chatRequest({ messages: [{ role: "user", content: "hi" }], sessionId: "../escape" }),
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.code).toBe("invalid_request");
   });
 });

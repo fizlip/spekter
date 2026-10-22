@@ -43,7 +43,7 @@ export const aiSdkLoop: AgentLoop = {
           : [],
       ),
     );
-    return { text: result.text, finishReason: result.finishReason, toolCalls };
+    return { text: result.text, finishReason: result.finishReason, toolCalls, produced: result.response.messages };
   },
 
   async *stream(call, options) {
@@ -78,8 +78,13 @@ export const aiSdkLoop: AgentLoop = {
           return;
         case "finish":
           yield { type: "finish", finishReason: part.finishReason };
-          return;
+          break;
       }
     }
+
+    // The fullStream has ended, so the response promise is settled and its messages
+    // carry every step's generated parts — including the tool calls and results a
+    // persistent transcript needs to keep.
+    yield { type: "produced", messages: (await result.response).messages };
   },
 };

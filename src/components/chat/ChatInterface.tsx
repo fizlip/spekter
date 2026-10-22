@@ -12,6 +12,8 @@ import {
   UserMessage,
 } from "./ChatMessageBubble";
 import { streamReply, toConversation } from "./stream-client";
+import { buildSession, shouldPersist } from "@/interfaces/web/session";
+import { putSession } from "@/interfaces/web/session-client";
 import type { ChatMessage } from "./types";
 import { Plus } from "lucide-react";
 
@@ -19,12 +21,18 @@ export function ChatInterface({
   initialMessages,
   todayKey,
   model,
+  sessionId,
+  onNewSession,
+  onSessionSaved,
 }: {
   initialMessages: ChatMessage[];
   todayKey: string;
   model: string | null;
+  sessionId: string;
+  onNewSession: () => void;
+  onSessionSaved: () => void;
 }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [draft, setDraft] = useState("");
   const [isThinking, setIsThinking] = useState(false);
   const [models, setModels] = useState<{ id: string; name: string }[]>([]);
@@ -32,6 +40,10 @@ export function ChatInterface({
   const scrollRef = useRef<HTMLElement>(null);
   const followBottomRef = useRef(true);
   const inFlightRef = useRef<AbortController | null>(null);
+  // Persisted once a turn is actually sent from this mount; restored or seeded
+  // transcripts do not re-save until the user continues them.
+  const dirtyRef = useRef(false);
+  const createdAtRef = useRef<string | null>(null);
 
   function handleScroll() {
     const el = scrollRef.current;
@@ -56,9 +68,24 @@ export function ChatInterface({
 
   const activeModel = selectedModel ?? model;
 
+  // Save on settle, not per frame: done, error, and abort all land here once the
+  // reply stops streaming. Fire-and-forget — a failed save logs and retries on
+  // the next settle rather than blocking the composer.
+  useEffect(() => {
+    if (!shouldPersist({ dirty: dirtyRef.current, isThinking, messages })) return;
+    const now = new Date().toISOString();
+    createdAtRef.current ??= now;
+    putSession(
+      buildSession({ id: sessionId, model: activeModel ?? null, messages, createdAt: createdAtRef.current, now }),
+    )
+      .then(onSessionSaved)
+      .catch((error) => console.error("Failed to save session", error));
+  }, [messages, isThinking, sessionId, activeModel, onSessionSaved]);
+
   async function sendMessage() {
     const content = draft.trim();
     if (!content || isThinking) return;
+    dirtyRef.current = true;
     followBottomRef.current = true;
     const sentAt = new Date().toISOString();
     const userMessage: ChatMessage = { id: `user-${Date.now()}`, role: "user", content, createdAt: sentAt };
@@ -153,13 +180,19 @@ export function ChatInterface({
             input && typeof input === "object" && "path" in input && typeof input.path === "string"
               ? input.path
               : undefined;
+          // Sandbox-style tools name their command `cmd`; show it the way file
+          // tools show their path.
+          const cmd =
+            input && typeof input === "object" && "cmd" in input && typeof input.cmd === "string"
+              ? input.cmd
+              : undefined;
           setMessages((current) =>
             insertBeforeReply(current, {
               id: `tool-${id}`,
               role: "tool",
               content: "",
               createdAt: new Date().toISOString(),
-              tool: { id, name, state: "running", ...(path ? { path } : {}) },
+              tool: { id, name, state: "running", ...(path ? { path } : {}), ...(cmd ? { cmd } : {}) },
             }),
           );
         },
@@ -182,6 +215,7 @@ export function ChatInterface({
       },
       controller.signal,
       activeModel ?? undefined,
+      sessionId,
     );
     inFlightRef.current = null;
     setIsThinking(false);
@@ -201,7 +235,7 @@ export function ChatInterface({
         type="button"
         onClick={() => {
           inFlightRef.current?.abort();
-          setMessages([]);
+          onNewSession();
         }}
         className="flex items-center gap-2 self-start m-2 cursor-pointer rounded-full px-2 py-1 text-sm text-black hover:bg-gray-100"
       >
