@@ -5,7 +5,7 @@ import { code } from "@streamdown/code";
 import { Streamdown } from "streamdown";
 import type { ChatMessage } from "./types";
 import {useEffect, useRef, useState} from "react"
-import {Brain, ChevronDown, FileText, ThumbsUp, ThumbsDown, Wrench} from "lucide-react"
+import {Brain, ChevronDown, FilePen, FilePlus, FileText, FolderOpen, OctagonX, Terminal, ThumbsUp, ThumbsDown, Trash2, Wrench} from "lucide-react"
 import { mermaid } from "@streamdown/mermaid";
 
 function formatTime(createdAt: string) {
@@ -141,20 +141,21 @@ export function SourceMessage({ message }: { message: ChatMessage }) {
   );
 }
 
-const TOOL_VERBS: Record<string, { doing: string; done: string }> = {
-  read_file: { doing: "Reading", done: "Read" },
-  list_files: { doing: "Listing", done: "Listed" },
-  write_file: { doing: "Writing", done: "Wrote" },
-  edit_file: { doing: "Editing", done: "Edited" },
-  delete_file: { doing: "Deleting", done: "Deleted" },
-  sandbox_exec: { doing: "Running", done: "Ran" },
-  sandbox_destroy: { doing: "Destroying sandbox", done: "Destroyed sandbox" },
+const TOOL_VERBS: Record<string, { doing: string; done: string; icon: typeof Wrench }> = {
+  read_file: { doing: "Reading", done: "Read", icon: FileText },
+  list_files: { doing: "Listing", done: "Listed", icon: FolderOpen },
+  write_file: { doing: "Writing", done: "Wrote", icon: FilePlus },
+  edit_file: { doing: "Editing", done: "Edited", icon: FilePen },
+  delete_file: { doing: "Deleting", done: "Deleted", icon: Trash2 },
+  sandbox_exec: { doing: "Running", done: "Ran", icon: Terminal },
+  sandbox_destroy: { doing: "Destroying sandbox", done: "Destroyed sandbox", icon: OctagonX },
 };
 
 export function ToolMessage({ message }: { message: ChatMessage }) {
   if (!message.tool) return null;
   const { name, state, path, cmd } = message.tool;
   const verbs = TOOL_VERBS[name];
+  const Icon = verbs?.icon ?? Wrench;
   const subject = path ?? cmd ?? name;
 
   return (
@@ -166,7 +167,7 @@ export function ToolMessage({ message }: { message: ChatMessage }) {
         <p
           className={`flex items-center gap-1.5 text-sm font-medium tracking-wide ${state === "failed" ? "text-red-700" : "text-black"}`}
         >
-          <Wrench size={14} className="shrink-0" />
+          <Icon size={14} className="shrink-0" />
           <span className="min-w-0 truncate" title={cmd ?? path}>
             {state === "running" ? (
               <span className="text-flare">
