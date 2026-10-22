@@ -48,7 +48,7 @@ function readLimaHome(env: Env): string {
   return limaHome;
 }
 
-function readWorkspaceRoot(env: Env): string {
+export function readWorkspaceRoot(env: Env): string {
   const root = expandHome(env.SANDBOX_WORKSPACE_ROOT?.trim() || DEFAULT_WORKSPACE_ROOT);
   const project = resolve();
   if (root === project || root.startsWith(project + sep)) {

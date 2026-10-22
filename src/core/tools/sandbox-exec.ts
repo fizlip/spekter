@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createSandboxClient, type SandboxClient } from "@/sandbox/client";
 import { SandboxError } from "@/sandbox/wire";
+import type { Env } from "../config";
 import type { SpekterTool } from "./types";
 
 // Run-time bounds for one command. The tool always sends an explicit timeout below its own
@@ -13,7 +14,7 @@ const CREATE_BUDGET_MS = 180_000;
 // Per stream, on top of the daemon's own cap: tool results go straight into the model's context.
 export const MAX_TOOL_OUTPUT_CHARS = 8_000;
 
-export function sandboxClient(env = process.env): SandboxClient {
+export function sandboxClient(env: Env = process.env): SandboxClient {
   const token = env.SANDBOX_TOKEN?.trim();
   if (!token) throw new Error("The sandbox is not configured: set SANDBOX_TOKEN (the same value sandboxd uses).");
   return createSandboxClient({ url: `http://127.0.0.1:${env.SANDBOX_PORT?.trim() || 3210}`, token });
