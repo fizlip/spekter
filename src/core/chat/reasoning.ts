@@ -1,6 +1,6 @@
-import type { ChatMessage } from "./contract";
+import type { ModelMessage } from "ai";
 
-export function needsReasoning(messages: ChatMessage[]): boolean {
-  const last = messages.at(-1)?.content ?? "";
-  return last.length > 10;
+export function needsReasoning(messages: ModelMessage[]): boolean {
+  const last = messages.at(-1)?.content;
+  return typeof last === "string" && last.length > 10;
 }

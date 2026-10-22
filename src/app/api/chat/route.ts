@@ -1,5 +1,6 @@
 import { completeChat } from "@/core/chat/complete";
 import { resolveCommands } from "@/core/chat/commands";
+import { openModelHistory } from "@/core/chat/model-history";
 import type { ChatResponse } from "@/core/chat/contract";
 import { readSystemPrompt } from "@/core/chat/system-prompt";
 import { readConfig, readMaxSteps } from "@/core/config";
@@ -12,7 +13,7 @@ import { errorResponse, readChatRequest } from "./http";
 export async function POST(request: Request) {
   const tracker = trackRequest("chat");
   try {
-    const { messages, model: requestedModel } = await readChatRequest(request);
+    const { messages, model: requestedModel, sessionId } = await readChatRequest(request);
 
     // Slash commands are message-scoped: /tokens anywhere in the last user message
     // apply to this request and are stripped before the model sees it.
@@ -42,11 +43,14 @@ export async function POST(request: Request) {
     };
     const model = resolved.model ?? requestedModel;
     const effectiveConfig = model ? { ...config, model } : config;
-    const { text, sources } = await completeChat(
-      resolved.messages,
+    const history = await openModelHistory(sessionId, resolved.messages);
+    const { text, sources, produced } = await completeChat(
+      history.messages,
       createOpenRouterModel(effectiveConfig),
       context,
     );
+    // A failed history write degrades the next turn's context, never this reply.
+    await history.commit(produced).catch((error) => console.error("Failed to persist model history", error));
     void tracker.reply();
 
     return Response.json({

@@ -35,6 +35,7 @@ export async function streamReply(
   { onDelta, onReasoning, onSources, onToolCall, onToolResult, onDone, onError }: StreamHandlers,
   signal?: AbortSignal,
   model?: string,
+  sessionId?: string,
 ): Promise<void> {
   const networkError = (error: unknown) => {
     if (!signal?.aborted) onError({ code: "network_error", message: errorMessage(error) });
@@ -45,7 +46,7 @@ export async function streamReply(
     response = await fetch("/api/chat/stream", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages, ...(model ? { model } : {}) }),
+      body: JSON.stringify({ messages, ...(model ? { model } : {}), ...(sessionId ? { sessionId } : {}) }),
       signal,
     });
   } catch (error) {

@@ -22,7 +22,7 @@ function stubFetch(response: Response | (() => Promise<Response>)) {
   return fetchMock;
 }
 
-async function run(signal?: AbortSignal) {
+async function run(signal?: AbortSignal, model?: string, sessionId?: string) {
   const deltas: string[] = [];
   const errors: StreamError[] = [];
   const done: string[] = [];
@@ -38,6 +38,8 @@ async function run(signal?: AbortSignal) {
       onSources: (list) => sources.push(list),
     },
     signal,
+    model,
+    sessionId,
   );
   return { deltas, errors, done, reasonings, sources };
 }
@@ -57,6 +59,15 @@ describe("streamReply", () => {
     expect(init.method).toBe("POST");
     expect(new Headers(init.headers).get("content-type")).toBe("application/json");
     expect(JSON.parse(init.body as string)).toEqual({ messages: conversation });
+  });
+
+  it("includes the session id in the request body when given", async () => {
+    const fetchMock = stubFetch(ndjsonResponse(['{"type":"done","model":"m"}\n']));
+
+    await run(undefined, undefined, "s1");
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ messages: conversation, sessionId: "s1" });
   });
 
   it("delivers each delta and then done with the model id", async () => {

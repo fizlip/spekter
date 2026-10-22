@@ -49,6 +49,7 @@ describe("aiSdkLoop.complete", () => {
       text: "It is Monday.",
       finishReason: "stop",
       toolCalls: [{ id: "call-current_time", name: "current_time", ok: true }],
+      produced: expect.any(Array),
     });
     expect(model.doGenerateCalls).toHaveLength(2);
     expect(model.doGenerateCalls[1].prompt.at(-1)).toMatchObject({
@@ -125,7 +126,24 @@ describe("aiSdkLoop.complete", () => {
 
     expect(model.doGenerateCalls).toHaveLength(1);
     expect(model.doGenerateCalls[0].tools).toBeUndefined();
-    expect(result).toEqual({ text: "Hi.", finishReason: "tool-calls", toolCalls: [] });
+    expect(result).toEqual({ text: "Hi.", finishReason: "tool-calls", toolCalls: [], produced: expect.any(Array) });
+  });
+
+  it("produces the turn's generated messages, tool calls and results included", async () => {
+    const model = scriptedModel([
+      { content: [toolCallContent("current_time")], finishReason: "tool-calls" },
+      { content: [{ type: "text", text: "It is Monday." }] },
+    ]);
+
+    const { produced } = await aiSdkLoop.complete(assembleChatCall(question, model), {
+      tools: [currentTime],
+      maxSteps: 5,
+    });
+
+    expect(produced.map((message) => message.role)).toEqual(["assistant", "tool", "assistant"]);
+    expect(JSON.stringify(produced)).toContain("call-current_time");
+    expect(JSON.stringify(produced)).toContain('"tool-result"');
+    expect(JSON.stringify(produced)).toContain("It is Monday.");
   });
 });
 
@@ -146,6 +164,7 @@ describe("aiSdkLoop.stream", () => {
       { type: "text", text: "It is " },
       { type: "text", text: "Monday." },
       { type: "finish", finishReason: "stop" },
+      { type: "produced", messages: expect.any(Array) },
     ]);
   });
 
@@ -160,7 +179,7 @@ describe("aiSdkLoop.stream", () => {
     );
 
     expect(events).toContainEqual({ type: "tool_result", id: "call-current_time", name: "current_time", ok: false });
-    expect(events.at(-1)).toEqual({ type: "finish", finishReason: "stop" });
+    expect(events.at(-2)).toEqual({ type: "finish", finishReason: "stop" });
   });
 
   it("turns tools off on the last allowed step", async () => {
@@ -171,7 +190,7 @@ describe("aiSdkLoop.stream", () => {
     );
 
     expect(model.doStreamCalls.map((call) => call.toolChoice)).toEqual([{ type: "auto" }, { type: "none" }]);
-    expect(events.at(-1)).toEqual({ type: "finish", finishReason: "tool-calls" });
+    expect(events.at(-2)).toEqual({ type: "finish", finishReason: "tool-calls" });
   });
 
   it("stops yielding once the abort signal fires", async () => {

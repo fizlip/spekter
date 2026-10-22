@@ -215,6 +215,7 @@ export function ChatInterface({
       },
       controller.signal,
       activeModel ?? undefined,
+      sessionId,
     );
     inFlightRef.current = null;
     setIsThinking(false);

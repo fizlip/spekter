@@ -52,15 +52,19 @@ export function trackRequest(endpoint: RequestEndpoint): RequestTracker {
 
 // Passes frames through untouched and settles the tracker from the terminal frame; a stream
 // that ends or is cancelled without one was stopped by the client. Writes are not awaited.
-export async function* trackStream(
+// The wrapped generator's return value (a turn's produced messages) propagates through,
+// which a for-await loop would have swallowed.
+export async function* trackStream<ReturnValue>(
   tracker: RequestTracker,
-  frames: AsyncGenerator<ChatStreamFrame>,
-): AsyncGenerator<ChatStreamFrame> {
+  frames: AsyncGenerator<ChatStreamFrame, ReturnValue>,
+): AsyncGenerator<ChatStreamFrame, ReturnValue> {
   try {
-    for await (const frame of frames) {
-      if (frame.type === "done") void tracker.reply();
-      else if (frame.type === "error") void tracker.fail(new SpekterError(frame.code, frame.message));
-      yield frame;
+    while (true) {
+      const { value, done } = await frames.next();
+      if (done) return value;
+      if (value.type === "done") void tracker.reply();
+      else if (value.type === "error") void tracker.fail(new SpekterError(value.code, value.message));
+      yield value;
     }
   } catch (error) {
     void tracker.fail(error);

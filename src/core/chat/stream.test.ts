@@ -1,3 +1,4 @@
+import type { ModelMessage } from "ai";
 import { describe, expect, it } from "vitest";
 import {
   failingModel,
@@ -9,11 +10,10 @@ import {
   toolCallParts,
 } from "../testing/mock-model";
 import { currentTime } from "../tools/current-time";
-import type { ChatMessage } from "./contract";
 import { streamChat } from "./stream";
 import type { ChatStreamFrame } from "./stream-frames";
 
-const conversation: ChatMessage[] = [
+const conversation: ModelMessage[] = [
   { role: "user", content: "My name is Filip." },
   { role: "assistant", content: "Nice to meet you, Filip." },
   { role: "user", content: "What is my name?" },
@@ -169,7 +169,7 @@ describe("streamChat", () => {
 });
 
 describe("streamChat with tools", () => {
-  const question: ChatMessage[] = [{ role: "user", content: "What is today's date?" }];
+  const question: ModelMessage[] = [{ role: "user", content: "What is today's date?" }];
 
   it("announces the tool call and its result, then streams the reply and lists the tool on done", async () => {
     const notes = [{ path: "projects/apollo.md", content: "Apollo launches on 14 March." }];
@@ -217,5 +217,19 @@ describe("streamChat with tools", () => {
       code: "provider_error",
       message: "Model stopped without completing its reply (finish reason: tool-calls)",
     });
+  });
+
+  it("returns the turn's produced messages, tool calls and results included", async () => {
+    const model = scriptedStreamingModel([
+      toolCallParts("current_time"),
+      [...textParts(["It is Monday."]), finishPart()],
+    ]);
+
+    const frames = streamChat(question, model, { tools: [currentTime], maxSteps: 5 });
+    let step = await frames.next();
+    while (!step.done) step = await frames.next();
+
+    expect(step.value?.map((message) => message.role)).toEqual(["assistant", "tool", "assistant"]);
+    expect(JSON.stringify(step.value)).toContain('"tool-result"');
   });
 });

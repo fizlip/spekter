@@ -1,4 +1,5 @@
 import { commandReplyFrames, resolveCommands } from "@/core/chat/commands";
+import { openModelHistory } from "@/core/chat/model-history";
 import { streamChat } from "@/core/chat/stream";
 import { serializeFrame, STREAM_CONTENT_TYPE, type ChatStreamFrame } from "@/core/chat/stream-frames";
 import { readSystemPrompt } from "@/core/chat/system-prompt";
@@ -9,17 +10,23 @@ import { createOpenRouterModel } from "@/core/models/openrouter";
 import { builtinTools } from "@/core/tools/registry";
 import { errorResponse, readChatRequest } from "../http";
 
-function streamResponse(frames: AsyncGenerator<ChatStreamFrame>): Response {
+function streamResponse<Done>(
+  frames: AsyncGenerator<ChatStreamFrame, Done>,
+  onDone?: (value: Done) => Promise<void>,
+): Response {
   const encoder = new TextEncoder();
 
   const body = new ReadableStream<Uint8Array>({
     async pull(controller) {
       const { value, done } = await frames.next();
-      if (done) controller.close();
-      else controller.enqueue(encoder.encode(serializeFrame(value)));
+      if (done) {
+        // The reply already streamed; a failed history write must not error the stream.
+        await onDone?.(value).catch((error) => console.error("Failed to persist model history", error));
+        controller.close();
+      } else controller.enqueue(encoder.encode(serializeFrame(value)));
     },
     async cancel() {
-      await frames.return(undefined);
+      await frames.return(undefined as Done);
     },
   });
 
@@ -33,7 +40,7 @@ function streamResponse(frames: AsyncGenerator<ChatStreamFrame>): Response {
 export async function POST(request: Request) {
   const tracker = trackRequest("chat_stream");
   try {
-    const { messages, model: requestedModel } = await readChatRequest(request);
+    const { messages, model: requestedModel, sessionId } = await readChatRequest(request);
 
     // Slash commands are message-scoped: /tokens anywhere in the last user message
     // apply to this request and are stripped before the model sees it.
@@ -58,12 +65,14 @@ export async function POST(request: Request) {
     };
     const model = resolved.model ?? requestedModel;
     const effectiveConfig = model ? { ...config, model } : config;
+    const history = await openModelHistory(sessionId, resolved.messages);
 
     return streamResponse(
       trackStream(
         tracker,
-        streamChat(resolved.messages, createOpenRouterModel(effectiveConfig), context, request.signal),
+        streamChat(history.messages, createOpenRouterModel(effectiveConfig), context, request.signal),
       ),
+      history.commit,
     );
   } catch (error) {
     void tracker.fail(error);

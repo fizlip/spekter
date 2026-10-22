@@ -1,4 +1,4 @@
-import type { LanguageModel } from "ai";
+import type { LanguageModel, ModelMessage } from "ai";
 import { agentLoop } from "../agent";
 import type { ToolOutcome } from "../agent/loop";
 import type { SpekterError } from "../errors";
@@ -11,19 +11,20 @@ import {
   toProviderError,
   type ChatContext,
 } from "./complete";
-import type { ChatMessage } from "./contract";
 import type { ChatStreamFrame } from "./stream-frames";
 
 function errorFrame({ code, message }: SpekterError): ChatStreamFrame {
   return { type: "error", code, message };
 }
 
+// Returns the messages the turn produced — its generator return value, so wire frames
+// never carry them. Undefined on aborted, cancelled, or failed turns: nothing to keep.
 export async function* streamChat(
-  messages: ChatMessage[],
+  messages: ModelMessage[],
   model: LanguageModel,
   context: ChatContext = {},
   abortSignal?: AbortSignal,
-): AsyncGenerator<ChatStreamFrame> {
+): AsyncGenerator<ChatStreamFrame, ModelMessage[] | undefined> {
   // External inputs are announced before the reply so interfaces can show what
   // went into it as it happens, not only after done.
   const sources = contextSources(context);
@@ -33,6 +34,10 @@ export async function* streamChat(
 
   let text = "";
   const toolCalls: ToolOutcome[] = [];
+  let produced: ModelMessage[] | undefined;
+  // Only a cleanly finished turn gets persisted: produced messages without a done
+  // frame mean the client never saw a complete reply.
+  let done = false;
   try {
     for await (const event of events) {
       switch (event.type) {
@@ -52,6 +57,9 @@ export async function* streamChat(
           yield { type: "tool_result", id, name, ok };
           break;
         }
+        case "produced":
+          produced = event.messages;
+          break;
         case "error":
           if (abortSignal?.aborted) return;
           yield errorFrame(toProviderError(event.error, context.knowledge));
@@ -60,17 +68,21 @@ export async function* streamChat(
           return;
         case "finish": {
           const problem = incompleteReplyReason(text, event.finishReason);
-          yield problem
-            ? { type: "error", code: "provider_error", message: problem }
-            : {
-                type: "done",
-                model: typeof model === "string" ? model : model.modelId,
-                sources: [...sources, ...toolSources(toolCalls)],
-              };
-          return;
+          if (problem) {
+            yield { type: "error", code: "provider_error", message: problem };
+            return;
+          }
+          yield {
+            type: "done",
+            model: typeof model === "string" ? model : model.modelId,
+            sources: [...sources, ...toolSources(toolCalls)],
+          };
+          done = true;
+          break;
         }
       }
     }
+    return done ? produced : undefined;
   } catch (error) {
     if (abortSignal?.aborted) return;
     yield errorFrame(toProviderError(error, context.knowledge));

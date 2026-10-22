@@ -25,12 +25,18 @@ export type LoopEvent =
   | { type: "reasoning"; text: string }
   | { type: "tool_call"; id: string; name: string; input: unknown }
   | ({ type: "tool_result" } & ToolOutcome)
+  // The messages the turn generated (assistant text, tool calls and results), for
+  // callers that persist the model-facing transcript across turns. Follows "finish".
+  | { type: "produced"; messages: ModelMessage[] }
   | { type: "error"; error: unknown }
   | { type: "abort" }
   | { type: "finish"; finishReason: FinishReason };
 
 // The seam every agent loop Brick implements. Callers depend on this, never on a loop library.
 export type AgentLoop = {
-  complete(call: ModelCall, options: LoopOptions): Promise<{ text: string; finishReason: FinishReason; toolCalls: ToolOutcome[] }>;
+  complete(
+    call: ModelCall,
+    options: LoopOptions,
+  ): Promise<{ text: string; finishReason: FinishReason; toolCalls: ToolOutcome[]; produced: ModelMessage[] }>;
   stream(call: ModelCall, options: LoopOptions): AsyncIterable<LoopEvent>;
 };

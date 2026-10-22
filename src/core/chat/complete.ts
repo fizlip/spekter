@@ -1,10 +1,10 @@
-import type { FinishReason, LanguageModel, SystemModelMessage } from "ai";
+import type { FinishReason, LanguageModel, ModelMessage, SystemModelMessage } from "ai";
 import { agentLoop } from "../agent";
 import type { LoopOptions, ModelCall, ToolOutcome } from "../agent/loop";
 import { ProviderError } from "../errors";
 import type { KnowledgeNote } from "../knowledge/markdown-folder";
 import type { SpekterTool } from "../tools/types";
-import type { ChatMessage, Source } from "./contract";
+import type { Source } from "./contract";
 import { needsReasoning } from "./reasoning";
 
 // A final "tool-calls" finish means the model still wanted tools when the loop ended.
@@ -53,7 +53,7 @@ export function contextSources({ knowledge = [], sources = [] }: ChatContext): S
 // The one place both endpoints build the model call; system prompt, knowledge and tools attach here.
 // Knowledge is its own system message so the prompt file and the notes change independently.
 export function assembleChatCall(
-  messages: ChatMessage[],
+  messages: ModelMessage[],
   model: LanguageModel,
   { systemPrompt, knowledge = [], effort: effortOverride }: ChatContext = {},
 ): ModelCall {
@@ -110,10 +110,10 @@ export function toProviderError(error: unknown, knowledge: KnowledgeNote[] = [])
 }
 
 export async function completeChat(
-  messages: ChatMessage[],
+  messages: ModelMessage[],
   model: LanguageModel,
   context: ChatContext = {},
-): Promise<{ text: string; sources: Source[] }> {
+): Promise<{ text: string; sources: Source[]; produced: ModelMessage[] }> {
   let result;
   try {
     result = await agentLoop.complete(assembleChatCall(messages, model, context), loopOptions(context));
@@ -121,8 +121,8 @@ export async function completeChat(
     throw toProviderError(error, context.knowledge);
   }
 
-  const { text, finishReason, toolCalls } = result;
+  const { text, finishReason, toolCalls, produced } = result;
   const problem = incompleteReplyReason(text, finishReason);
   if (problem) throw new ProviderError(problem);
-  return { text, sources: [...contextSources(context), ...toolSources(toolCalls)] };
+  return { text, sources: [...contextSources(context), ...toolSources(toolCalls)], produced };
 }
