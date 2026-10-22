@@ -28,6 +28,8 @@ describe("builtinTools", () => {
     expect(builtinTools.map((tool) => tool.name)).toEqual([
       "current_time",
       "list_files",
+      "list_skills",
+      "skill_metadata",
       "read_file",
       "write_file",
       "edit_file",
