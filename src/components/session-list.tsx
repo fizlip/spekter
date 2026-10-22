@@ -27,7 +27,7 @@ function relativeTime(iso: string) {
 // through the session provider.
 export function SessionList() {
   const { chatId, openSession, sessionsVersion } = useChatSession();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
 
   useEffect(() => {
