@@ -147,6 +147,8 @@ const TOOL_VERBS: Record<string, { doing: string; done: string }> = {
   write_file: { doing: "Writing", done: "Wrote" },
   edit_file: { doing: "Editing", done: "Edited" },
   delete_file: { doing: "Deleting", done: "Deleted" },
+  sandbox_exec: { doing: "Running", done: "Ran" },
+  sandbox_destroy: { doing: "Destroying sandbox", done: "Destroyed sandbox" },
 };
 
 export function ToolMessage({ message }: { message: ChatMessage }) {
@@ -168,10 +170,10 @@ export function ToolMessage({ message }: { message: ChatMessage }) {
           <span className="min-w-0 truncate" title={cmd ?? path}>
             {state === "running" ? (
               <span className="text-flare">
-                {verbs ? `${verbs.doing} ${subject}` : `Calling ${name}`}
+                {verbs ? `${verbs.doing} ${subject}` : `Calling ${subject}`}
               </span>
             ) : state === "succeeded" ? (
-              verbs ? `${verbs.done} ${subject}` : `Used ${name}`
+              verbs ? `${verbs.done} ${subject}` : `Used ${subject}`
             ) : (
               `${name} failed`
             )}
