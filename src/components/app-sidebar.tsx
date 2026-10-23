@@ -4,8 +4,6 @@ import {
   Logs,
   MousePointer2,
   ClockFading,
-  ShieldCheck,
-  File,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -35,12 +33,6 @@ export function AppSidebar() {
               <MousePointer2 size={12} /> Agent
             </SidebarMenuButton>
             <SidebarMenuButton
-              render={<Link href="/files" />}
-              className="font-inter hover:bg-[#e1e1e2] cursor-pointer text-sm hover:text-black text-gray-500"
-            >
-              <File size={12}/> Files
-            </SidebarMenuButton>
-            <SidebarMenuButton
               render={<Link href="/logs" />}
               className="font-inter hover:bg-[#e1e1e2] cursor-pointer text-sm hover:text-black text-gray-500"
             >
@@ -51,12 +43,6 @@ export function AppSidebar() {
               className="font-inter hover:bg-[#e1e1e2] cursor-pointer text-sm hover:text-black text-gray-500"
             >
               <ClockFading size={12}/> Automations
-            </SidebarMenuButton>
-            <SidebarMenuButton
-              render={<Link href="/" />}
-              className="font-inter hover:bg-[#e1e1e2] cursor-pointer text-sm hover:text-black text-gray-500"
-            >
-              <ShieldCheck  size={12}/> Security
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

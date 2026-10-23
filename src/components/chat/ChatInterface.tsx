@@ -224,24 +224,26 @@ export function ChatInterface({
   const lastAssistantIndex = messages.findLastIndex((m) => m.role === "assistant");
 
   return (
-    <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-chat shadow rounded-md">
-      {messages.length === 0 && (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[url(/afry.png)] bg-[position:center_30%] bg-no-repeat bg-[length:33%_auto] [mask-image:linear-gradient(to_bottom,rgb(0_0_0/0.05)_0%,rgb(0_0_0/0.025)_35%,rgb(0_0_0/0.008)_65%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,rgb(0_0_0/0.04)_0%,rgb(0_0_0/0.00)_50%,transparent_100%)]"
-        />
-      )}
-      <button
-        type="button"
-        onClick={() => {
-          inFlightRef.current?.abort();
-          onNewSession();
-        }}
-        className="flex items-center gap-2 self-start m-2 cursor-pointer rounded-full px-2 py-1 text-sm text-black hover:bg-gray-100"
-      >
-        <Plus size={14}/>
-        New session
-      </button>
+    <div className="shadow relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-chat rounded-md">
+      <div className="border-b">
+        {messages.length === 0 && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-[url(/afry.png)] bg-[position:center_30%] bg-no-repeat bg-[length:33%_auto] [mask-image:linear-gradient(to_bottom,rgb(0_0_0/0.05)_0%,rgb(0_0_0/0.025)_35%,rgb(0_0_0/0.008)_65%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,rgb(0_0_0/0.04)_0%,rgb(0_0_0/0.00)_50%,transparent_100%)]"
+          />
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            inFlightRef.current?.abort();
+            onNewSession();
+          }}
+          className="flex items-center gap-2 self-start m-2 cursor-pointer rounded-full px-2 py-1 text-sm text-black hover:bg-gray-100"
+        >
+          <Plus size={14}/>
+          New session
+        </button>
+      </div>
       <section
         ref={scrollRef}
         onScroll={handleScroll}
