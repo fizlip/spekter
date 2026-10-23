@@ -152,11 +152,25 @@ const TOOL_VERBS: Record<string, { doing: string; done: string; icon: typeof Wre
 };
 
 export function ToolMessage({ message }: { message: ChatMessage }) {
+  // Clicking expands the row only when the tool ran a command — file tools have
+  // nothing more to show than the subject already visible.
+  const [open, setOpen] = useState(false);
   if (!message.tool) return null;
   const { name, state, path, cmd } = message.tool;
   const verbs = TOOL_VERBS[name];
   const Icon = verbs?.icon ?? Wrench;
   const subject = path ?? cmd ?? name;
+
+  const label =
+    state === "running" ? (
+      <span className="text-flare">{verbs ? `${verbs.doing} ${subject}` : `Calling ${subject}`}</span>
+    ) : state === "succeeded" ? (
+      verbs ? `${verbs.done} ${subject}` : `Used ${subject}`
+    ) : (
+      `${name} failed`
+    );
+
+  const rowClass = `transition-all flex items-center gap-1.5 text-sm hover:font-medium tracking-wide ${state === "failed" ? "text-red-700" : "text-black"}`;
 
   return (
     <article
@@ -164,22 +178,34 @@ export function ToolMessage({ message }: { message: ChatMessage }) {
       className="flex items-start gap-2 justify-start px-2"
     >
       <div className="flex min-w-0 flex-1 flex-col p-1">
-        <p
-          className={`flex items-center gap-1.5 text-sm font-medium tracking-wide ${state === "failed" ? "text-red-700" : "text-black"}`}
-        >
-          <Icon size={14} className="shrink-0" />
-          <span className="min-w-0 truncate" title={cmd ?? path}>
-            {state === "running" ? (
-              <span className="text-flare">
-                {verbs ? `${verbs.doing} ${subject}` : `Calling ${subject}`}
+        {cmd ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setOpen(!open)}
+              aria-expanded={open}
+              className={`${rowClass} cursor-pointer self-start max-w-full`}
+            >
+              <Icon size={14} className="shrink-0" />
+              <span className="min-w-0 truncate" title={cmd}>
+                {label}
               </span>
-            ) : state === "succeeded" ? (
-              verbs ? `${verbs.done} ${subject}` : `Used ${subject}`
-            ) : (
-              `${name} failed`
+              <ChevronDown size={14} className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+            </button>
+            {open && (
+              <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-gray-100 p-2 font-mono text-xs text-slate-800">
+                <code>{cmd}</code>
+              </pre>
             )}
-          </span>
-        </p>
+          </>
+        ) : (
+          <p className={rowClass}>
+            <Icon size={14} className="shrink-0" />
+            <span className="min-w-0 truncate" title={cmd ?? path}>
+              {label}
+            </span>
+          </p>
+        )}
       </div>
     </article>
   );
