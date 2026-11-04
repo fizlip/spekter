@@ -6,7 +6,7 @@ import { readSystemPrompt } from "@/core/chat/system-prompt";
 import { readConfig, readMaxSteps } from "@/core/config";
 import { trackRequest } from "@/core/instrumentation/request-log";
 import { readKnowledge } from "@/core/knowledge/markdown-folder";
-import { createOpenRouterModel } from "@/core/models/openrouter";
+import { createChatModel, resolveModelConfig } from "@/core/models/model";
 import { builtinTools } from "@/core/tools/registry";
 import { errorResponse, readChatRequest } from "./http";
 
@@ -41,12 +41,11 @@ export async function POST(request: Request) {
       maxSteps,
       ...(resolved.effort ? { effort: resolved.effort } : {}),
     };
-    const model = resolved.model ?? requestedModel;
-    const effectiveConfig = model ? { ...config, model } : config;
+    const model = resolved.model ?? requestedModel ?? config.model;
     const history = await openModelHistory(sessionId, resolved.messages);
     const { text, sources, produced } = await completeChat(
       history.messages,
-      createOpenRouterModel(effectiveConfig),
+      createChatModel(resolveModelConfig(config, model)),
       context,
     );
     // A failed history write degrades the next turn's context, never this reply.
@@ -55,7 +54,7 @@ export async function POST(request: Request) {
 
     return Response.json({
       message: { role: "assistant", content: text },
-      model: effectiveConfig.model,
+      model,
       sources,
     } satisfies ChatResponse);
   } catch (error) {

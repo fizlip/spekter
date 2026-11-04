@@ -35,7 +35,7 @@ export function ChatInterface({
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [draft, setDraft] = useState("");
   const [isThinking, setIsThinking] = useState(false);
-  const [models, setModels] = useState<{ id: string; name: string }[]>([]);
+  const [models, setModels] = useState<{ id: string; name: string; provider?: "public" | "local" }[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const scrollRef = useRef<HTMLElement>(null);
   const followBottomRef = useRef(true);

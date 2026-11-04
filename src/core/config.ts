@@ -1,8 +1,12 @@
 import { NotConfiguredError } from "./errors";
 
 export type Config = {
-  apiKey: string;
+  // OpenRouter key; absent in local-only setups — checked when a public model runs.
+  apiKey: string | null;
   model: string;
+  // OpenAI-compatible local server (llama.cpp, LM Studio, ...); null disables local models.
+  localBaseUrl: string | null;
+  localApiKey: string | null;
 };
 
 export type Env = Record<string, string | undefined>;
@@ -38,10 +42,14 @@ export function readConfiguredModel(env: Env = process.env): string | null {
   return env.SPEKTER_MODEL?.trim() || null;
 }
 
+// OPENROUTER_API_KEY is optional: a request for a local/<id> model never needs it,
+// and resolveModelConfig throws only when a public model runs without the key.
 export function readConfig(env: Env = process.env): Config {
-  const { OPENROUTER_API_KEY: apiKey, SPEKTER_MODEL: model } = requireEnvVars(env, [
-    "OPENROUTER_API_KEY",
-    "SPEKTER_MODEL",
-  ]);
-  return { apiKey, model };
+  const { SPEKTER_MODEL: model } = requireEnvVars(env, ["SPEKTER_MODEL"]);
+  return {
+    apiKey: env.OPENROUTER_API_KEY?.trim() || null,
+    model,
+    localBaseUrl: env.SPEKTER_LOCAL_BASE_URL?.trim() || null,
+    localApiKey: env.SPEKTER_LOCAL_API_KEY?.trim() || null,
+  };
 }

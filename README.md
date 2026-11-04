@@ -16,7 +16,7 @@ The app itself has three pages: `/` is the chat — streaming replies, reasoning
 
 ## Core chat API
 
-`POST /api/chat` takes a conversation and returns the assistant's next reply as one complete message. It is stateless: send the full history every time. The model comes from an optional `model` field on the request, falling back to `SPEKTER_MODEL` in `.env.local`. `GET /api/models` returns the models available to the configured key, sorted by id and cached for an hour — the web chat's model picker reads it.
+`POST /api/chat` takes a conversation and returns the assistant's next reply as one complete message. It is stateless: send the full history every time. The model comes from an optional `model` field on the request, falling back to `SPEKTER_MODEL` in `.env.local`. `GET /api/models` returns the models available to the configured key, sorted by id and cached for an hour — the web chat's model picker reads it. A model id prefixed with `local/` runs against the OpenAI-compatible server at `SPEKTER_LOCAL_BASE_URL` (llama.cpp, LM Studio, ...) instead of OpenRouter; those ids appear in the picker with a local badge when the variable is set.
 
 The model's instructions come from one markdown file, pointed at by `SPEKTER_SYSTEM_PROMPT` and read fresh on every request, so editing the file takes effect on the next request with no restart. Both endpoints get the same instructions. Unset or an empty file sends no instructions, exactly as before; a configured file that cannot be read fails as `not_configured`, naming the file.
 

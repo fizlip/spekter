@@ -6,13 +6,26 @@ describe("readConfig", () => {
   it("returns the API key and model id when both are set", () => {
     expect(
       readConfig({ OPENROUTER_API_KEY: "sk-test", SPEKTER_MODEL: "openai/gpt-test" }),
-    ).toEqual({ apiKey: "sk-test", model: "openai/gpt-test" });
+    ).toEqual({ apiKey: "sk-test", model: "openai/gpt-test", localBaseUrl: null, localApiKey: null });
   });
 
-  it("names OPENROUTER_API_KEY when it is missing", () => {
-    expect(() => readConfig({ SPEKTER_MODEL: "openai/gpt-test" })).toThrow(
-      new NotConfiguredError("Missing environment variable: OPENROUTER_API_KEY"),
-    );
+  it("allows a missing OPENROUTER_API_KEY for local-only setups", () => {
+    expect(readConfig({ SPEKTER_MODEL: "local/qwen" }).apiKey).toBeNull();
+  });
+
+  it("reads the local server settings", () => {
+    expect(
+      readConfig({
+        SPEKTER_MODEL: "local/qwen",
+        SPEKTER_LOCAL_BASE_URL: " http://127.0.0.1:8081/v1 ",
+        SPEKTER_LOCAL_API_KEY: " local-key ",
+      }),
+    ).toEqual({
+      apiKey: null,
+      model: "local/qwen",
+      localBaseUrl: "http://127.0.0.1:8081/v1",
+      localApiKey: "local-key",
+    });
   });
 
   it("names SPEKTER_MODEL when it is missing", () => {
@@ -21,14 +34,8 @@ describe("readConfig", () => {
     );
   });
 
-  it("names both variables when both are missing", () => {
-    expect(() => readConfig({})).toThrow(
-      new NotConfiguredError("Missing environment variables: OPENROUTER_API_KEY, SPEKTER_MODEL"),
-    );
-  });
-
   it("treats empty strings as missing", () => {
-    expect(() => readConfig({ OPENROUTER_API_KEY: "", SPEKTER_MODEL: "  " })).toThrow(
+    expect(() => readConfig({ SPEKTER_MODEL: "  " })).toThrow(
       NotConfiguredError,
     );
   });

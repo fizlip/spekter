@@ -30,7 +30,7 @@ export function ChatComposer({
   onChange: (value: string) => void;
   onSend: () => void;
   model: string | null;
-  models: { id: string; name: string }[];
+  models: { id: string; name: string; provider?: "public" | "local" }[];
   onSelectModel: (model: string) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -176,13 +176,18 @@ export function ChatComposer({
                     No models found
                   </Combobox.Empty>
                   <Combobox.List className="max-h-56 overflow-y-auto">
-                    {(item: { id: string; name: string }) => (
+                    {(item: { id: string; name: string; provider?: "public" | "local" }) => (
                       <Combobox.Item
                         key={item.id}
                         value={item}
-                        className="cursor-pointer rounded-md px-2 py-1.5 text-sm data-[highlighted]:bg-gray-100"
+                        className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm data-[highlighted]:bg-gray-100"
                       >
-                        {item.id}
+                        <span className="truncate">{item.id}</span>
+                        {item.provider === "local" && (
+                          <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700">
+                            local
+                          </span>
+                        )}
                       </Combobox.Item>
                     )}
                   </Combobox.List>

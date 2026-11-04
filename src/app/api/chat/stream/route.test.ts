@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LanguageModel } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createOpenRouterModel } from "@/core/models/openrouter";
+import { createChatModel } from "@/core/models/model";
 import {
   failingModel,
   finishPart,
@@ -16,7 +16,10 @@ import {
 import { waitForLogEntries, withTempRequestLog } from "@/core/testing/request-log";
 import { POST } from "./route";
 
-vi.mock("@/core/models/openrouter", () => ({ createOpenRouterModel: vi.fn() }));
+vi.mock("@/core/models/model", async (importActual) => ({
+  ...(await importActual()),
+  createChatModel: vi.fn(),
+}));
 
 const log = withTempRequestLog();
 
@@ -38,7 +41,7 @@ function streamRequest(body: unknown, signal?: AbortSignal) {
 }
 
 function stubOpenRouterModel(model: LanguageModel) {
-  vi.mocked(createOpenRouterModel).mockReturnValue(model);
+  vi.mocked(createChatModel).mockReturnValue(model);
 }
 
 async function readFrames(response: Response) {
@@ -60,7 +63,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await rm(promptDir, { recursive: true, force: true });
   vi.unstubAllEnvs();
-  vi.mocked(createOpenRouterModel).mockReset();
+  vi.mocked(createChatModel).mockReset();
 });
 
 describe("POST /api/chat/stream", () => {
@@ -76,7 +79,7 @@ describe("POST /api/chat/stream", () => {
       { type: "delta", text: "is Filip." },
       { type: "done", model: "openai/gpt-test", sources: [] },
     ]);
-    expect(createOpenRouterModel).toHaveBeenCalledWith({ apiKey: "sk-test", model: "openai/gpt-test" });
+    expect(createChatModel).toHaveBeenCalledWith({ provider: "openrouter", apiKey: "sk-test", model: "openai/gpt-test" });
   });
 
   it("returns the 503 not_configured JSON error without calling the model when the API key is missing", async () => {
@@ -87,7 +90,7 @@ describe("POST /api/chat/stream", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("content-type")).toContain("application/json");
     expect((await response.json()).error.code).toBe("not_configured");
-    expect(createOpenRouterModel).not.toHaveBeenCalled();
+    expect(createChatModel).not.toHaveBeenCalled();
   });
 
   it("offers the built-in current_time tool to the model", async () => {
@@ -120,7 +123,7 @@ describe("POST /api/chat/stream", () => {
     const body = await response.json();
     expect(body.error.code).toBe("not_configured");
     expect(body.error.message).toContain("SPEKTER_MAX_STEPS");
-    expect(createOpenRouterModel).not.toHaveBeenCalled();
+    expect(createChatModel).not.toHaveBeenCalled();
   });
 
   it("streams the configured system prompt to the model without changing the frames", async () => {
@@ -152,7 +155,7 @@ describe("POST /api/chat/stream", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("content-type")).toContain("application/json");
     expect((await response.json()).error.code).toBe("not_configured");
-    expect(createOpenRouterModel).not.toHaveBeenCalled();
+    expect(createChatModel).not.toHaveBeenCalled();
   });
 
   it("behaves as if unset when the configured prompt file is empty", async () => {
@@ -201,7 +204,7 @@ describe("POST /api/chat/stream", () => {
     const body = await response.json();
     expect(body.error.code).toBe("not_configured");
     expect(body.error.message).toContain(missing);
-    expect(createOpenRouterModel).not.toHaveBeenCalled();
+    expect(createChatModel).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -213,7 +216,7 @@ describe("POST /api/chat/stream", () => {
 
     expect(response.status).toBe(400);
     expect((await response.json()).error.code).toBe("invalid_request");
-    expect(createOpenRouterModel).not.toHaveBeenCalled();
+    expect(createChatModel).not.toHaveBeenCalled();
   });
 
   it("keeps status 200 and ends with an error frame when the provider fails mid-stream", async () => {
@@ -255,7 +258,7 @@ describe("POST /api/chat/stream", () => {
   });
 
   it("returns 500 internal_error for unexpected failures before the stream starts", async () => {
-    vi.mocked(createOpenRouterModel).mockImplementation(() => {
+    vi.mocked(createChatModel).mockImplementation(() => {
       throw new Error("boom");
     });
 
